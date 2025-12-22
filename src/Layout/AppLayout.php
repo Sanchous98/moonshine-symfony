@@ -15,6 +15,10 @@ use MoonShine\UI\Components\Layout\Wrapper;
 
 class AppLayout extends BaseLayout
 {
+    protected bool $contentCentered = false;
+
+    protected bool $contentSimpled = false;
+
     /**
      * @return list<MenuElementContract>
      */
@@ -42,8 +46,8 @@ class AppLayout extends BaseLayout
                                 Content::make($this->getContentComponents()),
 
                                 $this->getFooterComponent(),
-                            ])->class('layout-page')->name(self::CONTENT_FRAGMENT_NAME),
-                        ])->class('flex grow overflow-auto')->customAttributes(['id' => self::CONTENT_ID]),
+                            ])->class(['layout-page', 'layout-page-simple' => $this->contentSimpled])->name(self::CONTENT_FRAGMENT_NAME),
+                        ])->class(['layout-main', 'layout-main-centered' => $this->contentCentered])->customAttributes(['id' => self::CONTENT_ID]),
                     ]),
                 ]),
             ])

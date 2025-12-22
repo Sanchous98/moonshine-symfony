@@ -31,15 +31,17 @@ use MoonShine\Crud\Contracts\Notifications\MoonShineNotificationContract;
 use MoonShine\Crud\Contracts\Page\DetailPageContract;
 use MoonShine\Crud\Contracts\Page\FormPageContract;
 use MoonShine\Crud\Contracts\Page\IndexPageContract;
+use MoonShine\Crud\Contracts\PageComponents\DefaultListComponentContract;
 use MoonShine\Crud\Notifications\MemoryNotification;
 use MoonShine\Crud\Pages\DetailPage;
 use MoonShine\Crud\Pages\FormPage;
 use MoonShine\Crud\Pages\IndexPage;
+use MoonShine\Crud\Pages\PageComponents\DefaultDetailComponent;
+use MoonShine\Crud\Pages\PageComponents\DefaultForm;
+use MoonShine\Crud\Pages\PageComponents\DefaultListComponent;
 use MoonShine\MenuManager\MenuAutoloader;
 use MoonShine\MenuManager\MenuManager;
 use MoonShine\Symfony\Command\InstallCommand;
-use MoonShine\Symfony\Command\OptimizeCommand;
-use MoonShine\Symfony\Controller\MoonShineController;
 use MoonShine\Symfony\DependencyInjection\AssetResolver;
 use MoonShine\Symfony\DependencyInjection\Configurator;
 use MoonShine\Symfony\DependencyInjection\CrudRequest;
@@ -206,11 +208,26 @@ final class MoonShineBundle extends AbstractBundle
             ->setAutowired(true);
 
         $builder
+            ->register(DefaultListComponent::class)
+            ->setPublic(true)
+            ->setAutowired(true);
+
+        $builder
             ->register(DetailPageContract::class, DetailPage::class)
             ->setAutowired(true);
 
         $builder
+            ->register(DefaultDetailComponent::class)
+            ->setPublic(true)
+            ->setAutowired(true);
+
+        $builder
             ->register(FormPageContract::class, FormPage::class)
+            ->setAutowired(true);
+
+        $builder
+            ->register(DefaultForm::class)
+            ->setPublic(true)
             ->setAutowired(true);
     }
 

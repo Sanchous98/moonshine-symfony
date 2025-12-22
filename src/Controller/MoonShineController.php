@@ -8,7 +8,6 @@ use MoonShine\Contracts\Core\CrudResourceContract;
 use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\UI\TableBuilderContract;
 use MoonShine\Contracts\UI\TableRowContract;
-use MoonShine\Laravel\TypeCasts\ModelCaster;
 use MoonShine\Symfony\Instances;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 

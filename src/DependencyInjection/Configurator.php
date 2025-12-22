@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\DependencyInjection;
 
+use MoonShine\ColorManager\Palettes\NeutralPalette;
 use MoonShine\Contracts\Core\PageContract;
 use Illuminate\Support\Arr;
 use MoonShine\Contracts\Core\DependencyInjection\ConfiguratorContract;
@@ -136,6 +137,11 @@ final class Configurator implements ConfiguratorContract
     public function getPages(): array
     {
         return [];
+    }
+
+    public function getPalette(): string
+    {
+        return NeutralPalette::class;
     }
 
     public function getLocale(): string

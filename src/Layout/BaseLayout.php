@@ -11,6 +11,7 @@ use MoonShine\Crud\Layouts\AbstractLayout;
 use MoonShine\UI\Components\Heading;
 use MoonShine\UI\Components\Layout\Burger;
 use MoonShine\Crud\Components\Fragment;
+use MoonShine\UI\Components\Layout\Div;
 use MoonShine\UI\Components\Layout\Footer;
 use MoonShine\UI\Components\Layout\Header;
 use MoonShine\UI\Components\Layout\Logo;
@@ -96,16 +97,16 @@ abstract class BaseLayout extends AbstractLayout
             Fragment::make([
                 Fragment::make([
                     $this->getLogoComponent()->minimized(),
-                ])->class('menu-heading-logo'),
+                ])->class('menu-logo'),
 
                 Fragment::make([
                     ThemeSwitcher::make(),
                     ...$this->sidebarTopSlot(),
                     Fragment::make([
-                        Burger::make(),
-                    ])->class('menu-heading-burger'),
-                ])->class('menu-heading-actions'),
-            ])->class('menu-heading')->name('sidebar-top'),
+                        Burger::make()->sidebar(),
+                    ])->class('menu-burger'),
+                ])->class('menu-actions'),
+            ])->class('menu-header')->name('sidebar-top'),
 
             Fragment::make([
                 ...$this->sidebarSlot(),
@@ -116,10 +117,7 @@ abstract class BaseLayout extends AbstractLayout
                         $this->getProfileComponent(sidebar: true),
                     ],
                 ),
-            ])->customAttributes([
-                'class' => 'menu',
-                ':class' => "asideMenuOpen && '_is-opened'",
-            ])->name('sidebar-content'),
+            ])->class('menu menu--vertical')->name('sidebar-content'),
         ])->collapsed();
     }
 
@@ -140,7 +138,7 @@ abstract class BaseLayout extends AbstractLayout
 
             Fragment::make([
                 Menu::make()->top(),
-            ])->class('menu-navigation')->name('topbar-menu'),
+            ])->class('menu menu--horizontal')->name('topbar-menu'),
 
             Fragment::make([
                 ...$this->topBarSlot(),
@@ -151,16 +149,14 @@ abstract class BaseLayout extends AbstractLayout
                     ],
                 ),
 
-                Fragment::make()->class('menu-inner-divider'),
+                Div::make()->class('menu-divider menu-divider--vertical'),
                 ThemeSwitcher::make(),
 
                 Fragment::make([
-                    Burger::make(),
+                    Burger::make()->topbar(),
                 ])->class('menu-burger'),
-            ])->class('menu-actions')->name('topbar-actions'),
-        ])->customAttributes([
-            ':class' => "asideMenuOpen && '_is-opened'",
-        ]);
+            ])->class('menu-burger'),
+        ])->class('menu-actions')->name('topbar-actions');
     }
 
     protected function getHeaderComponent(): Header
