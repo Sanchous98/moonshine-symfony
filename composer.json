@@ -24,7 +24,7 @@
         "ext-json": "*",
         "illuminate/filesystem": "^10|^11|^12",
         "lee-to/fast-attributes": "^0.3",
-        "symfony/psr-http-message-bridge": "^7.1",
+        "symfony/psr-http-message-bridge": "^7.1|^8.0",
         "nyholm/psr7": "^1.8",
         "moonshine/asset-manager": "4.x-dev",
         "moonshine/color-manager": "4.x-dev",
