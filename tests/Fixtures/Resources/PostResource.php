@@ -13,6 +13,7 @@ use MoonShine\Crud\Pages\IndexPage;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Symfony\Tests\Fixtures\Pages\PostFormPage;
 use MoonShine\Support\Attributes\AsyncMethod;
+use MoonShine\UI\Fields\File;
 use MoonShine\UI\Fields\ID;
 use MoonShine\UI\Fields\Text;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -68,6 +69,7 @@ final class PostResource extends CrudResource
                 },
             ),
             Text::make('Slug', 'slug')->reactive(),
+            File::make('Cover', 'cover')->dir('covers')->allowedExtensions(['txt', 'png']),
         ];
     }
 
@@ -109,6 +111,7 @@ final class PostResource extends CrudResource
     public function save(DataWrapperContract $item, ?FieldsContract $fields = null): DataWrapperContract
     {
         $fields ??= $this->getFormFields()->onlyFields();
+        $fields->fill($item->toArray(), $item);
 
         $data = $item->getOriginal();
 

@@ -19,6 +19,11 @@ final class Request extends AbstractRequest
 
     private const FLASHES_ATTRIBUTE = '_moonshine_flashes';
 
+    /**
+     * Request attribute with values that override the submitted input
+     */
+    public const INPUT_ATTRIBUTE = '_moonshine_input';
+
     private const UNTRIMMED = ['password', 'password_confirmation', 'current_password'];
 
     /** @var Collection<array-key, mixed>|null */
@@ -39,9 +44,11 @@ final class Request extends AbstractRequest
      */
     public function getAll(): Collection
     {
-        return $this->normalized ??= parent::getAll()->map(
-            fn (mixed $value, int|string $key): mixed => $this->normalize($value, (string) $key),
-        );
+        $overrides = $this->symfonyRequest->attributes->get(self::INPUT_ATTRIBUTE, []);
+
+        return $this->normalized ??= parent::getAll()
+            ->replace(\is_array($overrides) ? $overrides : [])
+            ->map(fn (mixed $value, int|string $key): mixed => $this->normalize($value, (string) $key));
     }
 
     private function normalize(mixed $value, string $key): mixed

@@ -41,6 +41,7 @@ use MoonShine\Crud\Pages\PageComponents\DefaultForm;
 use MoonShine\Crud\Pages\PageComponents\DefaultListComponent;
 use MoonShine\MenuManager\MenuAutoloader;
 use MoonShine\MenuManager\MenuManager;
+use MoonShine\Symfony\Applies\FileApply;
 use MoonShine\Symfony\Command\InstallCommand;
 use MoonShine\Symfony\DependencyInjection\AssetResolver;
 use MoonShine\Symfony\EventSubscriber\ExceptionSubscriber;
@@ -57,7 +58,9 @@ use MoonShine\Symfony\Security\AccessSubscriber;
 use MoonShine\Symfony\Security\Auth;
 use MoonShine\Symfony\Security\Csrf;
 use MoonShine\Symfony\Security\CsrfSubscriber;
+use MoonShine\Symfony\Storage\StorageRegistry;
 use MoonShine\Symfony\Validation\Validator;
+use MoonShine\UI\Fields\File;
 use MoonShine\UI\Applies\AppliesRegister;
 use Symfony\Component\Cache\Psr16Cache;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -121,6 +124,27 @@ final class MoonShineBundle extends AbstractBundle
                         ->scalarNode('provider')
                             ->info('User provider of the firewall, the first configured provider is used when null')
                             ->defaultNull()
+                        ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('storage')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('default')->defaultValue('public')->end()
+                        ->arrayNode('disks')
+                            ->useAttributeAsKey('name')
+                            ->arrayPrototype()
+                                ->children()
+                                    ->scalarNode('root')->isRequired()->end()
+                                    ->scalarNode('url')->isRequired()->end()
+                                ->end()
+                            ->end()
+                            ->defaultValue([
+                                'public' => [
+                                    'root' => '%kernel.project_dir%/public/storage',
+                                    'url' => '/storage',
+                                ],
+                            ])
                         ->end()
                     ->end()
                 ->end()
@@ -201,6 +225,7 @@ final class MoonShineBundle extends AbstractBundle
         $this->cache($builder);
         $this->notifications($builder);
         $this->security($config, $builder);
+        $this->storage($config, $builder);
     }
 
     /**
@@ -377,8 +402,15 @@ final class MoonShineBundle extends AbstractBundle
 
         $builder
             ->register(AppliesRegisterContract::class, AppliesRegister::class)
+            ->addMethodCall('type', ['fields'])
+            ->addMethodCall('for', [ResourceContract::class])
+            ->addMethodCall('push', [[File::class => FileApply::class]])
             ->setPublic(true)
             ->setAutowired(true);
+
+        $builder
+            ->register(FileApply::class)
+            ->setPublic(true);
     }
 
     /**
@@ -434,6 +466,20 @@ final class MoonShineBundle extends AbstractBundle
             ->register(CacheAttributesContract::class, CacheAttributes::class)
             ->setPublic(true)
             ->setAutowired(true);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function storage(array $config, ContainerBuilder $builder): void
+    {
+        /** @var array{default: string, disks: array<string, array{root: string, url: string}>} $storage */
+        $storage = $config['storage'];
+
+        $builder
+            ->register(StorageRegistry::class)
+            ->setArguments([$storage['disks'], $storage['default']])
+            ->setPublic(true);
     }
 
     private function notifications(ContainerBuilder $builder): void

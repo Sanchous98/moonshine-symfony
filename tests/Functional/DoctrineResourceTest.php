@@ -238,4 +238,32 @@ final class DoctrineResourceTest extends WebTestCase
         self::assertStringContainsString('Alpha', $this->content());
         self::assertStringNotContainsString('Gamma', $this->content());
     }
+
+    public function testInlineUpdateFromTable(): void
+    {
+        $this->client->request('GET', '/admin/resource/article-resource/index-page');
+        self::assertStringContainsString('/admin/update-field/column/article-resource/3', $this->content());
+
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/3', [
+            'field' => 'title',
+            'value' => 'Gamma inline',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(204);
+
+        $article = $this->article(3);
+        self::assertSame('Gamma inline', $article?->getTitle());
+        // other fields are untouched
+        self::assertTrue($article->isPublished());
+    }
+
+    public function testInlineUpdateUnknownField(): void
+    {
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/3', [
+            'field' => 'unknown',
+            'value' => 'x',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(404);
+    }
 }
