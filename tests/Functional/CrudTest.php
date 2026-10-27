@@ -24,6 +24,67 @@ final class CrudTest extends WebTestCase
         $this->client = self::createClient();
     }
 
+    private function token(): string
+    {
+        if ($this->client->getCookieJar()->get('XSRF-TOKEN') === null) {
+            $this->client->request('GET', '/admin');
+        }
+
+        return (string) $this->client->getCookieJar()->get('XSRF-TOKEN')?->getValue();
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function post(string $uri, array $parameters = []): void
+    {
+        $this->client->request('POST', $uri, [...$parameters, '_token' => $this->token()]);
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function ajax(string $uri, array $parameters = []): void
+    {
+        $this->client->xmlHttpRequest('POST', $uri, $parameters, server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function json(string $uri, array $data): void
+    {
+        $this->client->jsonRequest('POST', $uri, $data, server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+    }
+
+    public function testStateChangingRequestRequiresCsrfToken(): void
+    {
+        $this->client->xmlHttpRequest('POST', '/admin/resource/post-resource/crud/1/delete');
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertArrayHasKey(1, PostResource::$items);
+    }
+
+    public function testFormsContainCsrfToken(): void
+    {
+        $crawler = $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
+
+        $token = $crawler->filter('form[action="/admin/resource/post-resource/crud/1/update"] input[name="_token"]');
+
+        self::assertCount(1, $token);
+        self::assertNotEmpty($token->attr('value'));
+        self::assertNotEmpty($crawler->filter('meta[name="csrf-token"]')->attr('content'));
+
+        // the rendered token is accepted
+        $this->client->request('POST', '/admin/resource/post-resource/crud/1/update', [
+            'title' => 'Via form token',
+            '_token' => $token->attr('value'),
+        ]);
+
+        self::assertResponseRedirects();
+        self::assertSame('Via form token', PostResource::$items[1]['title']);
+    }
+
     public function testIndexPageListsItems(): void
     {
         $this->client->request('GET', '/admin/resource/post-resource/index-page');
@@ -75,7 +136,7 @@ final class CrudTest extends WebTestCase
 
     public function testStoreViaAjax(): void
     {
-        $this->client->xmlHttpRequest('POST', '/admin/resource/post-resource/crud', ['title' => 'Created']);
+        $this->ajax('/admin/resource/post-resource/crud', ['title' => 'Created']);
 
         self::assertResponseStatusCodeSame(201);
         self::assertSame('Created', PostResource::$items[3]['title'] ?? null);
@@ -86,7 +147,7 @@ final class CrudTest extends WebTestCase
 
     public function testUpdateWithRedirect(): void
     {
-        $this->client->request('POST', '/admin/resource/post-resource/crud/1/update', ['title' => 'Updated']);
+        $this->post('/admin/resource/post-resource/crud/1/update', ['title' => 'Updated']);
 
         self::assertResponseRedirects('/admin/resource/post-resource/form-page/1');
         self::assertSame('Updated', PostResource::$items[1]['title']);
@@ -94,7 +155,7 @@ final class CrudTest extends WebTestCase
 
     public function testDestroy(): void
     {
-        $this->client->xmlHttpRequest('POST', '/admin/resource/post-resource/crud/1/delete');
+        $this->ajax('/admin/resource/post-resource/crud/1/delete');
 
         self::assertResponseIsSuccessful();
         self::assertArrayNotHasKey(1, PostResource::$items);
@@ -102,7 +163,7 @@ final class CrudTest extends WebTestCase
 
     public function testMassDelete(): void
     {
-        $this->client->xmlHttpRequest('POST', '/admin/resource/post-resource/crud/mass-delete', ['ids' => [1, 2]]);
+        $this->ajax('/admin/resource/post-resource/crud/mass-delete', ['ids' => [1, 2]]);
 
         self::assertResponseIsSuccessful();
         self::assertSame([], PostResource::$items);
@@ -161,7 +222,7 @@ final class CrudTest extends WebTestCase
 
     public function testReactiveFields(): void
     {
-        $this->client->jsonRequest('POST', '/admin/reactive/form-page/post-resource/1', [
+        $this->json('/admin/reactive/form-page/post-resource/1', [
             '_component_name' => 'post-resource',
             'values' => ['title' => 'Hello World', 'slug' => ''],
         ]);

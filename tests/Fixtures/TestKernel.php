@@ -9,6 +9,8 @@ use MoonShine\Symfony\Tests\Fixtures\Pages\Dashboard;
 use MoonShine\Symfony\Tests\Fixtures\Pages\LoginPage;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
+use Symfony\Bundle\SecurityBundle\SecurityBundle;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
@@ -21,6 +23,11 @@ final class TestKernel extends Kernel
     public function registerBundles(): iterable
     {
         yield new FrameworkBundle();
+
+        if ($this->environment === 'auth') {
+            yield new SecurityBundle();
+        }
+
         yield new MoonShineBundle();
     }
 
@@ -45,6 +52,7 @@ final class TestKernel extends Kernel
             'secret' => 'test',
             'test' => true,
             'http_method_override' => false,
+            'property_access' => true,
             'translator' => ['default_path' => '%kernel.project_dir%/translations'],
             'session' => ['storage_factory_id' => 'session.storage.factory.mock_file'],
         ]);
@@ -52,11 +60,28 @@ final class TestKernel extends Kernel
         $container->extension('moonshine', [
             'namespace' => 'MoonShine\Symfony\Tests\Fixtures',
             'prefix' => $this->environment === 'prefixed' ? '/backoffice/panel' : '/admin',
+            'auth' => ['enabled' => $this->environment === 'auth'],
             'pages' => [
                 'dashboard' => Dashboard::class,
                 'login' => LoginPage::class,
             ],
         ]);
+
+        if ($this->environment === 'auth') {
+            $container->extension('security', [
+                'password_hashers' => [InMemoryUser::class => 'plaintext'],
+                'providers' => [
+                    'users' => [
+                        'memory' => [
+                            'users' => [
+                                'admin' => ['password' => 'secret', 'roles' => ['ROLE_ADMIN']],
+                                'editor' => ['password' => 'secret', 'roles' => ['ROLE_USER']],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+        }
 
         $container->services()
             ->set('logger', NullLogger::class);

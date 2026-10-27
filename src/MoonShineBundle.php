@@ -52,6 +52,10 @@ use MoonShine\Symfony\DependencyInjection\Router;
 use MoonShine\Symfony\DependencyInjection\Translator;
 use MoonShine\Symfony\DependencyInjection\ViewRenderer;
 use MoonShine\Symfony\Layout\AppLayout;
+use MoonShine\Symfony\Security\AccessSubscriber;
+use MoonShine\Symfony\Security\Auth;
+use MoonShine\Symfony\Security\Csrf;
+use MoonShine\Symfony\Security\CsrfSubscriber;
 use MoonShine\UI\Applies\AppliesRegister;
 use Symfony\Component\Cache\Psr16Cache;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -60,6 +64,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
+use Symfony\Component\PropertyAccess\PropertyAccessor;
 
 final class MoonShineBundle extends AbstractBundle
 {
@@ -99,7 +104,74 @@ final class MoonShineBundle extends AbstractBundle
                     ->scalarPrototype()->end()
                     ->defaultValue([])
                 ->end()
+                ->arrayNode('auth')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultFalse()->end()
+                        ->scalarNode('role')
+                            ->info('Role required to access the panel, null allows any authenticated user')
+                            ->defaultValue('ROLE_ADMIN')
+                        ->end()
+                        ->booleanNode('firewall')
+                            ->info('Register the "moonshine" firewall automatically')
+                            ->defaultTrue()
+                        ->end()
+                        ->scalarNode('provider')
+                            ->info('User provider of the firewall, the first configured provider is used when null')
+                            ->defaultNull()
+                        ->end()
+                    ->end()
+                ->end()
+                ->booleanNode('csrf')
+                    ->info('Protect admin requests with CSRF tokens, requires symfony/security-csrf')
+                    ->defaultTrue()
+                ->end()
             ->end();
+    }
+
+    public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
+    {
+        if ($builder->hasExtension('framework')) {
+            $builder->prependExtensionConfig('framework', ['csrf_protection' => true]);
+        }
+
+        $config = array_replace_recursive([], ...$builder->getExtensionConfig('moonshine'));
+        $auth = $config['auth'] ?? [];
+
+        if (! ($auth['enabled'] ?? false) || ! ($auth['firewall'] ?? true) || ! $builder->hasExtension('security')) {
+            return;
+        }
+
+        $prefix = '/' . trim((string) ($config['prefix'] ?? '/admin'), '/');
+
+        $firewall = array_filter([
+            'pattern' => '^' . preg_quote($prefix, '#') . '(/|$)',
+            'provider' => $auth['provider'] ?? null,
+            'form_login' => [
+                'login_path' => 'moonshine.login',
+                'check_path' => 'moonshine.authenticate',
+                'default_target_path' => 'moonshine.index',
+                'username_parameter' => 'username',
+                'password_parameter' => 'password',
+                'enable_csrf' => (bool) ($config['csrf'] ?? true),
+                'csrf_parameter' => Csrf::FIELD,
+                'csrf_token_id' => Csrf::TOKEN_ID,
+            ],
+            'logout' => [
+                'path' => 'moonshine.logout',
+                'target' => 'moonshine.login',
+            ],
+            // remember me signatures rely on symfony/property-access
+            'remember_me' => class_exists(PropertyAccessor::class) ? [
+                'secret' => '%kernel.secret%',
+                'remember_me_parameter' => 'remember',
+                'path' => $prefix,
+            ] : null,
+        ], static fn (mixed $value): bool => $value !== null);
+
+        $builder->prependExtensionConfig('security', [
+            'firewalls' => ['moonshine' => $firewall],
+        ]);
     }
 
     public function build(ContainerBuilder $container): void
@@ -126,6 +198,44 @@ final class MoonShineBundle extends AbstractBundle
         $this->menu($builder);
         $this->cache($builder);
         $this->notifications($builder);
+        $this->security($config, $builder);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function security(array $config, ContainerBuilder $builder): void
+    {
+        /** @var array{enabled: bool, role: ?string} $auth */
+        $auth = $config['auth'];
+
+        $builder
+            ->register(Auth::class)
+            ->setArguments([
+                $auth['enabled'],
+                $auth['role'],
+                new Reference('security.helper', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            ])
+            ->setPublic(true);
+
+        $builder
+            ->register(Csrf::class)
+            ->setArguments([
+                $config['csrf']
+                    ? new Reference('security.csrf.token_manager', ContainerBuilder::NULL_ON_INVALID_REFERENCE)
+                    : null,
+            ])
+            ->setPublic(true);
+
+        $builder
+            ->register(AccessSubscriber::class)
+            ->setAutowired(true)
+            ->addTag('kernel.event_subscriber');
+
+        $builder
+            ->register(CsrfSubscriber::class)
+            ->setAutowired(true)
+            ->addTag('kernel.event_subscriber');
     }
 
     private function commands(ContainerConfigurator $container): void

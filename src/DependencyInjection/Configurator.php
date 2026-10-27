@@ -50,12 +50,12 @@ final class Configurator implements ConfiguratorContract
 
     public function isUseProfile(): bool
     {
-        return false;
+        return $this->isAuthEnabled();
     }
 
     public function isAuthEnabled(): bool
     {
-        return false;
+        return (bool) $this->get('auth.enabled', false);
     }
 
     public function isUseNotifications(): bool
