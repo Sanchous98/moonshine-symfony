@@ -8,7 +8,9 @@ use MoonShine\Symfony\MoonShineBundle;
 use MoonShine\Symfony\Tests\Fixtures\Pages\Dashboard;
 use MoonShine\Symfony\Tests\Fixtures\Pages\LoginPage;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleFormPage;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleResource;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleType;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
@@ -60,6 +62,8 @@ final class TestKernel extends Kernel
             'test' => true,
             'http_method_override' => false,
             'property_access' => true,
+            'form' => true,
+            'validation' => true,
             'translator' => ['default_path' => '%kernel.project_dir%/translations'],
             'session' => ['storage_factory_id' => 'session.storage.factory.mock_file'],
         ]);
@@ -132,7 +136,9 @@ final class TestKernel extends Kernel
 
             $container->services()
                 ->defaults()->autowire()->autoconfigure()
-                ->set(ArticleResource::class);
+                ->set(ArticleResource::class)
+                ->set(ArticleFormPage::class)
+                ->set(ArticleType::class)->tag('form.type');
         }
 
         $container->services()

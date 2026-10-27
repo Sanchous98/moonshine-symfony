@@ -25,8 +25,6 @@
         "ext-json": "*",
         "illuminate/filesystem": "^10|^11|^12|^13",
         "illuminate/pagination": "^10|^11|^12|^13",
-        "illuminate/translation": "^10|^11|^12|^13",
-        "illuminate/validation": "^10|^11|^12|^13",
         "illuminate/view": "^10|^11|^12|^13",
         "lee-to/fast-attributes": "^0.3",
         "moonshine/asset-manager": "4.x-dev",
@@ -42,24 +40,31 @@
         "symfony/console": "^7.1|^8.0",
         "symfony/filesystem": "^7.1|^8.0",
         "symfony/framework-bundle": "^7.1|^8.0",
+        "symfony/property-access": "^7.1|^8.0",
         "symfony/psr-http-message-bridge": "^7.1|^8.0",
         "symfony/routing": "^7.1|^8.0",
         "symfony/security-csrf": "^7.1|^8.0",
-        "symfony/translation": "^7.1|^8.0"
+        "symfony/translation": "^7.1|^8.0",
+        "symfony/validator": "^7.1|^8.0"
     },
     "require-dev": {
         "doctrine/doctrine-bundle": "^2.13",
         "doctrine/orm": "^3.3",
+        "illuminate/translation": "^10|^11|^12|^13",
+        "illuminate/validation": "^10|^11|^12|^13",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.5",
         "symfony/browser-kit": "^7.1|^8.0",
         "symfony/css-selector": "^7.1|^8.0",
+        "symfony/form": "^7.1|^8.0",
         "symfony/security-bundle": "^7.1|^8.0"
     },
     "suggest": {
         "symfony/security-bundle": "Required for authentication of the admin panel",
         "doctrine/orm": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
-        "doctrine/doctrine-bundle": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource"
+        "doctrine/doctrine-bundle": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
+        "symfony/form": "Map and validate form pages with Symfony form types (SymfonyFormPage)",
+        "illuminate/validation": "Laravel style string rules in FormPage::rules()"
     },
     "autoload": {
         "psr-4": {

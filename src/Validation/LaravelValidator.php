@@ -9,9 +9,9 @@ use Illuminate\Validation\Factory;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
- * Validates data with Laravel style rules returned by FormPage::rules()
+ * Validates data with Laravel style string rules, optional fallback for FormPage::rules()
  */
-final class Validator
+final class LaravelValidator
 {
     private ?Factory $factory = null;
 
