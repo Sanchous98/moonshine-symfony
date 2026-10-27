@@ -114,4 +114,28 @@ final class AuthorizationTest extends WebTestCase
         $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
         self::assertResponseStatusCodeSame(403);
     }
+
+    public function testAsyncComponentRequiresPageAccess(): void
+    {
+        PostResource::$denied = [Ability::VIEW_ANY];
+
+        $this->client->request('GET', '/admin/component/index-page/post-resource', [
+            '_component_name' => 'index-table-post-resource',
+        ]);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertStringNotContainsString('First post', (string) $this->client->getResponse()->getContent());
+    }
+
+    public function testReactiveRequiresPageAccess(): void
+    {
+        PostResource::$denied = [Ability::UPDATE];
+
+        $this->send('POST', '/admin/reactive/form-page/post-resource/1', [
+            '_component_name' => 'post-resource',
+            'values' => ['title' => 'Hello World'],
+        ]);
+
+        self::assertResponseStatusCodeSame(403);
+    }
 }
