@@ -133,7 +133,7 @@ final readonly class CrudRequest implements CrudRequestContract
             ->value();
     }
 
-    public function getParentRelationId(): int|string|null
+    public function getParentRelationId(): ?string
     {
         $parentResource = $this->getParentResourceId();
 
