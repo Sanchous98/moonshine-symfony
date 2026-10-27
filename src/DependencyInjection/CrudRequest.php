@@ -4,44 +4,37 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\DependencyInjection;
 
-
 use Illuminate\Support\Str;
 use MoonShine\Contracts\Core\CrudResourceContract;
 use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\PageContract;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-final class CrudRequest implements CrudRequestContract
+final readonly class CrudRequest implements CrudRequestContract
 {
-    public function __construct(private CoreContract $core) {
-
-    }
+    public function __construct(
+        private CoreContract $core,
+        private RequestStack $requestStack,
+    ) {}
 
     public function getResource(): ?CrudResourceContract
     {
         $uri = $this->getResourceUri();
 
-        if($uri === null) {
+        if ($uri === null) {
             return null;
         }
 
-        return $this->core->getResources()->findByUri($uri);
+        $resource = $this->core->getResources()->findByUri($uri);
+
+        return $resource instanceof CrudResourceContract ? $resource : null;
     }
 
     public function getResourceUri(): ?string
     {
-        $parts = explode('/', trim($this->core->getRequest()->getPath(), '/'));
-
-        if(count($parts) < 2) {
-            return null;
-        }
-
-        if(in_array($parts[1], ['component', 'reactive', 'method'], true)) {
-            return $parts[3] ?? null;
-        }
-
-        return $parts[2] ?? null;
+        return $this->getRouteParam('resourceUri');
     }
 
     public function hasResource(): bool
@@ -53,14 +46,14 @@ final class CrudRequest implements CrudRequestContract
     {
         $uri = $this->getPageUri();
 
-        if($uri === null) {
+        if ($uri === null) {
             return null;
         }
 
-        if ($this->hasResource()) {
-            return $this->getResource()
-                ?->getPages()
-                ?->findByUri($uri);
+        $resource = $this->getResource();
+
+        if ($resource !== null) {
+            return $resource->getPages()->findByUri($uri);
         }
 
         return $this->core->getPages()->findByUri($uri);
@@ -68,84 +61,69 @@ final class CrudRequest implements CrudRequestContract
 
     public function getPage(): PageContract
     {
-        $page = $this->findPage();
-
-        if($page === null) {
-            throw new NotFoundHttpException();
-        }
-
-        return $page;
+        return $this->findPage() ?? throw new NotFoundHttpException('MoonShine page not found');
     }
 
     public function getPageUri(): ?string
     {
-        $parts = explode('/', trim($this->core->getRequest()->getPath(), '/'));
-
-        if(count($parts) < 2) {
-            return null;
-        }
-
-        if($parts[1] === 'page') {
-            return $parts[2] ?? null;
-        }
-
-        if(in_array($parts[1], ['component', 'reactive', 'method'], true)) {
-            return $parts[2] ?? null;
-        }
-
-        return $parts[3] ?? null;
+        return $this->getRouteParam('pageUri');
     }
 
     public function getItemID(): int|string|null
     {
-        $id = $this->core->getRequest()->get('resourceItem');
+        $id = $this->core->getRequest()->getScalar('resourceItem');
 
-        if($id !== null) {
+        if (\is_int($id) || \is_string($id)) {
             return $id;
         }
 
-        $parts = explode('/', trim($this->core->getRequest()->getPath(), '/'));
-
-        return $parts[4] ?? null;
+        return $this->getRouteParam('resourceItem');
     }
 
     public function getComponentName(): string
     {
-        return Str::of($this->core->getRequest()->get('_component_name'))
+        $name = $this->core->getRequest()->getScalar('_component_name', '');
+
+        return Str::of(\is_string($name) ? $name : '')
             ->before('-unique-')
             ->value();
     }
 
     public function getFragmentLoad(): ?string
     {
-        return $this->core->getRequest()->getScalar('_fragment-load');
+        $fragment = $this->core->getRequest()->getScalar('_fragment-load');
+
+        return \is_string($fragment) ? $fragment : null;
     }
 
     public function isFragmentLoad(?string $name = null): bool
     {
         $fragment = $this->getFragmentLoad();
 
-        if (! \is_null($fragment) && ! \is_null($name)) {
+        if ($fragment !== null && $name !== null) {
             return $fragment === $name;
         }
 
-        return ! \is_null($fragment);
+        return $fragment !== null;
     }
 
-    // TODO
     public function isMoonShineRequest(): bool
     {
-        return true;
+        $route = $this->requestStack->getCurrentRequest()?->attributes->get('_route');
+
+        return \is_string($route) && str_starts_with($route, 'moonshine.');
     }
 
     public function getParentResourceId(): ?string
     {
-        return $this->core->getRequest()->getScalar('_parentId');
+        $parentId = $this->core->getRequest()->getScalar('_parentId');
+
+        return \is_string($parentId) ? $parentId : null;
     }
 
     public function getParentRelationName(): ?string
     {
-        if (\is_null($parentResource = $this->getParentResourceId())) {
+        if (($parentResource = $this->getParentResourceId()) === null) {
             return null;
         }
 
@@ -157,9 +135,15 @@ final class CrudRequest implements CrudRequestContract
 
     public function getParentRelationId(): int|string|null
     {
-        return
-            \is_null($parentResource = $this->getParentResourceId())
-                ? null
-                : Str::of($parentResource)->after('-')->value();
+        $parentResource = $this->getParentResourceId();
+
+        return $parentResource === null ? null : Str::of($parentResource)->after('-')->value();
+    }
+
+    private function getRouteParam(string $name): ?string
+    {
+        $value = $this->requestStack->getCurrentRequest()?->attributes->get($name);
+
+        return \is_scalar($value) && $value !== '' ? (string) $value : null;
     }
 }

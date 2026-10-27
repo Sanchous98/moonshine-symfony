@@ -10,6 +10,8 @@ use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Crud\JsonResponse;
 use MoonShine\Support\Attributes\AsyncMethod;
 use MoonShine\Support\Enums\ToastType;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\JsonResponse as SymfonyJsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -20,43 +22,55 @@ use Symfony\Component\Routing\Attribute\Route;
 use Throwable;
 
 #[AsController]
-#[Route('/admin/method/{pageUri}/{resourceUri?}', name: 'moonshine.method')]
+#[Route('/method/{pageUri}/{resourceUri?}', name: 'moonshine.method', methods: ['GET', 'POST'])]
 final class MethodController extends MoonShineController
 {
-    public function __invoke(CrudRequestContract $crudRequest, RequestContract $request): Response
-    {
+    public function __invoke(
+        CrudRequestContract $crudRequest,
+        RequestContract $request,
+        ?LoggerInterface $logger = null,
+    ): Response {
         $toast = [
             'type' => 'info',
-            'message' => $request->getScalar('message', ''),
+            'message' => (string) $request->getScalar('message', ''),
         ];
 
         try {
             $method = $request->getScalar('method');
-            $page = $crudRequest->getPage();
-            $pageOrResource = $crudRequest->hasResource()
-                ? $crudRequest->getResource()
-                : $page;
 
-            $target = method_exists($page, $method) ? $page : $pageOrResource;
-
-            if (! Attributes::for($target, AsyncMethod::class)->method($method)->first() instanceof AsyncMethod) {
-                throw new \RuntimeException("$method does not exist");
+            if (! \is_string($method) || $method === '') {
+                throw new RuntimeException('Method name is required');
             }
 
-            // TODO DI resolve
-            $result = $target?->{$method}($crudRequest);
+            $page = $crudRequest->getPage();
+            $target = method_exists($page, $method) ? $page : $crudRequest->getResource();
 
-            $toast = $request->getSession('toast', $toast);
+            if ($target === null
+                || ! method_exists($target, $method)
+                || ! Attributes::for($target, AsyncMethod::class)->method($method)->first() instanceof AsyncMethod
+            ) {
+                throw new RuntimeException("$method does not exist");
+            }
+
+            $result = $target->{$method}($crudRequest);
+
+            $sessionToast = $request->getSession('toast');
+
+            if (\is_array($sessionToast)) {
+                $toast = [
+                    'type' => \is_string($sessionToast['type'] ?? null) ? $sessionToast['type'] : $toast['type'],
+                    'message' => \is_string($sessionToast['message'] ?? null) ? $sessionToast['message'] : $toast['message'],
+                ];
+            }
         } catch (Throwable $e) {
+            $logger?->error($e->getMessage(), ['exception' => $e]);
             $result = $e;
         }
 
-
-        if ($result instanceof SymfonyJsonResponse) {
-            return $result;
-        }
-
-        if ($result instanceof BinaryFileResponse || $result instanceof StreamedResponse) {
+        if ($result instanceof SymfonyJsonResponse
+            || $result instanceof BinaryFileResponse
+            || $result instanceof StreamedResponse
+        ) {
             return $result;
         }
 
@@ -69,9 +83,12 @@ final class MethodController extends MoonShineController
         return JsonResponse::make()
             ->setStatusCode($result instanceof Throwable ? Response::HTTP_INTERNAL_SERVER_ERROR : Response::HTTP_OK)
             ->when(
-                $redirect,
-                fn(JsonResponse $response) => $response->redirect($result instanceof RedirectResponse ? $result->getTargetUrl() : null)
+                $redirect !== null,
+                static fn (JsonResponse $response): JsonResponse => $response->redirect((string) $redirect),
             )
-            ->toast($result instanceof Throwable ? $result->getMessage() : $toast['message'], $result instanceof Throwable ? ToastType::ERROR : ToastType::from($toast['type']));
+            ->toast(
+                $result instanceof Throwable ? $result->getMessage() : $toast['message'],
+                $result instanceof Throwable ? ToastType::ERROR : (ToastType::tryFrom($toast['type']) ?? ToastType::INFO),
+            );
     }
 }
