@@ -70,6 +70,7 @@ final class PostResource extends CrudResource
             ),
             Text::make('Slug', 'slug')->reactive(),
             File::make('Cover', 'cover')->dir('covers')->allowedExtensions(['txt', 'png']),
+            File::make('Attachments', 'attachments')->disk('memory')->dir('docs')->multiple(),
         ];
     }
 
