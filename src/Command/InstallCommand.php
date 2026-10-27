@@ -51,6 +51,12 @@ final class InstallCommand extends Command
 
         $io->success('MoonShine installed. Open the admin panel at /admin');
 
+        $io->note([
+            'To protect the panel, enable "auth" in config/packages/moonshine.yaml',
+            'and add the "moonshine" firewall to config/packages/security.yaml:',
+        ]);
+        $io->writeln((string) file_get_contents(self::PACKAGE_DIR . '/recipe/security.yaml'));
+
         return Command::SUCCESS;
     }
 

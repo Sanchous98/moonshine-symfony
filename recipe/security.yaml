@@ -1,0 +1,23 @@
+# Add the "moonshine" firewall to config/packages/security.yaml, before the "main" firewall
+security:
+    firewalls:
+        moonshine:
+            # must match the "prefix" option of the bundle
+            pattern: ^/admin
+            # replace with the user provider of your application
+            provider: app_user_provider
+            form_login:
+                login_path: moonshine.login
+                check_path: moonshine.authenticate
+                default_target_path: moonshine.index
+                username_parameter: username
+                password_parameter: password
+                enable_csrf: true
+                csrf_parameter: _token
+                csrf_token_id: moonshine
+            logout:
+                path: moonshine.logout
+                target: moonshine.login
+            remember_me:
+                secret: '%kernel.secret%'
+                remember_me_parameter: remember
