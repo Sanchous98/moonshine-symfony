@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 #[AsController]
@@ -29,6 +30,7 @@ final class CrudController extends MoonShineController
     public function __construct(
         CoreContract $core,
         private readonly FormProcessor $formProcessor,
+        private readonly ?LoggerInterface $logger = null,
     ) {
         parent::__construct($core);
     }
@@ -46,10 +48,14 @@ final class CrudController extends MoonShineController
 
         $ids = $request->get('ids', []);
 
-        $resource->massDelete(\is_array($ids) ? array_values(array_filter(
-            $ids,
-            static fn (mixed $id): bool => \is_int($id) || \is_string($id),
-        )) : []);
+        try {
+            $resource->massDelete(\is_array($ids) ? array_values(array_filter(
+                $ids,
+                static fn (mixed $id): bool => \is_int($id) || \is_string($id),
+            )) : []);
+        } catch (Throwable $e) {
+            return $this->failed($resource, $e);
+        }
 
         return JsonResponse::make()
             ->toast($this->trans('moonshine::ui.deleted'))
@@ -79,9 +85,13 @@ final class CrudController extends MoonShineController
 
         $resource->setActivePage($resource->getIndexPage());
 
-        $resource->delete(
-            $resource->getCaster()->cast($resource->getItemOrFail()),
-        );
+        $item = $resource->getItemOrFail();
+
+        try {
+            $resource->delete($resource->getCaster()->cast($item));
+        } catch (Throwable $e) {
+            return $this->failed($resource, $e);
+        }
 
         return JsonResponse::make()
             ->toast($this->trans('moonshine::ui.deleted'))
@@ -123,10 +133,7 @@ final class CrudController extends MoonShineController
         try {
             $item = $resource->save($resource->getCaster()->cast($result->item), $result->fields);
         } catch (Throwable $e) {
-            return $resource->modifyErrorResponse(
-                JsonResponse::make()->toast($e->getMessage(), ToastType::ERROR)->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR),
-                $e,
-            );
+            return $this->failed($resource, $e);
         }
 
         $resource->setItem($item->getOriginal());
@@ -193,6 +200,16 @@ final class CrudController extends MoonShineController
         return $this->redirect(\is_string($back) && $back !== ''
             ? $back
             : $resource->getFormPageUrl($resource->getCastedData()));
+    }
+
+    private function failed(CrudResource $resource, Throwable $e): Response
+    {
+        $this->logger?->error($e->getMessage(), ['exception' => $e]);
+
+        return $resource->modifyErrorResponse(
+            JsonResponse::make()->toast($e->getMessage(), ToastType::ERROR)->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR),
+            $e,
+        );
     }
 
     private function symfonyRequest(RequestContract $request): SymfonyRequest

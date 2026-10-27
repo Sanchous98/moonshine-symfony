@@ -8,6 +8,7 @@ use MoonShine\Symfony\MoonShineBundle;
 use MoonShine\Symfony\Tests\Fixtures\Pages\Dashboard;
 use MoonShine\Symfony\Tests\Fixtures\Pages\LoginPage;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleEventSubscriber;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleFormPage;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleResource;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleType;
@@ -143,6 +144,7 @@ final class TestKernel extends Kernel
                 ->defaults()->autowire()->autoconfigure()
                 ->set(ArticleResource::class)
                 ->set(ArticleFormPage::class)
+                ->set(ArticleEventSubscriber::class)
                 ->set(ArticleType::class)->tag('form.type');
         }
 
