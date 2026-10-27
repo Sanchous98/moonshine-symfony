@@ -9,67 +9,48 @@ use MoonShine\Contracts\Core\DependencyInjection\EndpointsContract;
 use MoonShine\Contracts\Core\PageContract;
 use MoonShine\Contracts\Core\ResourceContract;
 use MoonShine\Core\AbstractRouter;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class Router extends AbstractRouter
 {
+    /**
+     * Route context parameters are path segments, they must not leak into the query string
+     */
+    private const CONTEXT_PARAMS = ['pageUri', 'resourceUri', 'resourceItem'];
+
     public function __construct(
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly RequestStack $requestStack,
     ) {}
 
     public function to(string $name = '', array $params = []): string
     {
-        return $this->urlGenerator->generate(
-            $this->getName($name),
+        $name = $this->getName($name);
+
+        $params = array_filter(
             $this->getParams($params),
+            static fn (mixed $value): bool => \is_scalar($value) || $value instanceof \Stringable,
+        );
+
+        return $this->withoutContextQuery(
+            $this->urlGenerator->generate($name, $params),
         );
     }
 
     public function getEndpoints(): EndpointsContract
     {
-        return new Endpoints($this, $this->urlGenerator);
+        return new Endpoints($this);
     }
 
     public function extractPageUri(?PageContract $page = null): ?string
     {
-        if($page !== null) {
-            return $page->getUriKey();
-        }
-
-        $parts = explode('/', trim($this->urlGenerator->getContext()->getPathInfo(), '/'));
-
-        if(count($parts) < 2) {
-            return null;
-        }
-
-        if($parts[1] === 'page') {
-            return $parts[2] ?? null;
-        }
-
-        if(in_array($parts[1], ['component', 'reactive', 'method'], true)) {
-            return $parts[2] ?? null;
-        }
-
-        return $parts[3] ?? null;
+        return $page?->getUriKey() ?? $this->getRouteParam('pageUri');
     }
 
     public function extractResourceUri(?ResourceContract $resource = null): ?string
     {
-        if($resource !== null) {
-            return $resource->getUriKey();
-        }
-
-        $parts = explode('/', trim($this->urlGenerator->getContext()->getPathInfo(), '/'));
-
-        if(count($parts) < 2) {
-            return null;
-        }
-
-        if(in_array($parts[1], ['component', 'reactive', 'method'], true)) {
-            return $parts[3] ?? null;
-        }
-
-        return $parts[2] ?? null;
+        return $resource?->getUriKey() ?? $this->getRouteParam('resourceUri');
     }
 
     public function extractResourceItem(
@@ -80,18 +61,46 @@ final class Router extends AbstractRouter
             return $key;
         }
 
-        if($resource?->getCastedData()?->getKey() !== null) {
-            return $resource?->getCastedData()?->getKey();
+        $castedKey = $resource?->getCastedData()?->getKey();
+
+        if ($castedKey !== null) {
+            return $castedKey;
         }
 
         $id = $this->getParam('resourceItem');
 
-        if($id !== null) {
+        if (\is_int($id) || \is_string($id)) {
             return $id;
         }
 
-        $parts = explode('/', trim($this->urlGenerator->getContext()->getPathInfo(), '/'));
+        return $this->getRouteParam('resourceItem');
+    }
 
-        return $parts[4] ?? null;
+    private function withoutContextQuery(string $url): string
+    {
+        $query = parse_url($url, \PHP_URL_QUERY);
+
+        if (! \is_string($query) || $query === '') {
+            return $url;
+        }
+
+        parse_str($query, $params);
+
+        $filtered = array_diff_key($params, array_flip(self::CONTEXT_PARAMS));
+
+        if (\count($filtered) === \count($params)) {
+            return $url;
+        }
+
+        $base = strstr($url, '?', true);
+
+        return $filtered === [] ? $base : $base . '?' . http_build_query($filtered, '', '&', \PHP_QUERY_RFC3986);
+    }
+
+    private function getRouteParam(string $name): ?string
+    {
+        $value = $this->requestStack->getCurrentRequest()?->attributes->get($name);
+
+        return \is_scalar($value) && $value !== '' ? (string) $value : null;
     }
 }

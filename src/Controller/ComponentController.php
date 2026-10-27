@@ -12,31 +12,28 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[AsController]
-#[Route('/admin/component/{pageUri}/{resourceUri?}', name: 'moonshine.component')]
+#[Route('/component/{pageUri}/{resourceUri?}', name: 'moonshine.component', methods: ['GET'])]
 final class ComponentController extends MoonShineController
 {
     public function __invoke(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
-        $page = $crudRequest->getPage();
-
-        $component = $page->getComponents()->findByName(
-            $crudRequest->getComponentName()
+        $component = $crudRequest->getPage()->getComponents()->findByName(
+            $crudRequest->getComponentName(),
         );
 
-        if (\is_null($component)) {
-            return new Response();
+        if ($component === null) {
+            return $this->response('');
         }
 
         if ($component instanceof TableBuilderContract) {
-            $component = $this->responseWithTable($component, $request->get('_key'));
+            $key = $request->getScalar('_key');
+            $component = $this->responseWithTable($component, \is_int($key) || \is_string($key) ? $key : null);
         }
 
         if (\is_string($component)) {
-            return new Response();
+            return $this->response($component);
         }
 
-        return new Response(
-            (string) $component->render()
-        );
+        return $this->response($component->render());
     }
 }
