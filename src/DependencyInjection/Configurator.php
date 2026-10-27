@@ -15,6 +15,7 @@ use MoonShine\Contracts\UI\LayoutContract;
 use MoonShine\Symfony\Layout\AppLayout;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 final class Configurator implements ConfiguratorContract
 {
@@ -121,18 +122,24 @@ final class Configurator implements ConfiguratorContract
     }
 
     /**
-     * @return list<string>
+     * @return array<array-key, string>
      */
     public function getLocales(): array
     {
         $locales = $this->get('locales', []);
 
-        return \is_array($locales) ? array_values($locales) : [];
+        return \is_array($locales) ? $locales : [];
     }
 
+    /**
+     * Current locale of the admin panel
+     */
     public function getLocale(): string
     {
-        return $this->getString('locale', 'en');
+        $requestStack = $this->container->has('request_stack') ? $this->container->get('request_stack') : null;
+        $locale = $requestStack instanceof RequestStack ? $requestStack->getCurrentRequest()?->getLocale() : null;
+
+        return \is_string($locale) && $locale !== '' ? $locale : $this->getString('locale', 'en');
     }
 
     public function getLocaleKey(): string

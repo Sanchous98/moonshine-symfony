@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'ui' => [
         'profile' => 'Profile',
@@ -32,7 +34,7 @@ return [
         'loading' => 'Loading ...',
         'notfound' => 'Records not found',
         'collapse_menu' => 'Collapse menu',
-        '404' => 'Houston we have a problem page not found',
+        404 => 'Houston we have a problem page not found',
         'copied' => 'Copied!',
         'notifications' => [
             'title' => 'Notifications',
@@ -62,16 +64,12 @@ return [
             'admins_title' => 'Admins',
             'role_title' => 'Roles',
             'role_name' => 'Title',
-
             'main_information' => 'Main information',
             'change_password' => 'Change password',
-
             'queued' => 'Queued',
-
             'export' => [
                 'exported' => 'File exported',
             ],
-
             'import' => [
                 'imported' => 'Imported',
                 'file_required' => 'File is required',
@@ -88,6 +86,17 @@ return [
             'max_item' => 'Only :count values can be added',
             'remove_item' => 'Remove item',
         ],
+        'home' => 'Home',
+        'select' => [
+            'no_results' => 'No results found',
+            'no_options' => 'No options to choose from',
+            'add_item' => 'Press Enter to add :value',
+            'unique_item' => 'Only unique values can be added',
+            'custom_add_item' => 'Only values matching specific conditions can be added',
+            'max_item' => 'Only :count values can be added',
+            'remove_item' => 'Remove item',
+            'clear_all' => 'Clear all',
+        ],
     ],
     'auth' => [
         'failed' => 'These credentials do not match our records.',
@@ -102,7 +111,6 @@ return [
         'previous' => '&laquo; Previous',
         'next' => 'Next &raquo;',
     ],
-
     'validation' => [
         'accepted' => 'The :attribute must be accepted.',
         'accepted_if' => 'The :attribute must be accepted when :other is :value.',
@@ -219,35 +227,12 @@ return [
         'uploaded' => 'The :attribute failed to upload.',
         'url' => 'The :attribute must be a valid URL.',
         'uuid' => 'The :attribute must be a valid UUID.',
-
-        /*
-        |--------------------------------------------------------------------------
-        | Custom Validation Language Lines
-        |--------------------------------------------------------------------------
-        |
-        | Here you may specify custom validation messages for attributes using the
-        | convention "attribute.rule" to name the lines. This makes it quick to
-        | specify a specific custom language line for a given attribute rule.
-        |
-        */
-
         'custom' => [
             'attribute-name' => [
                 'rule-name' => 'custom-message',
             ],
         ],
-
-        /*
-        |--------------------------------------------------------------------------
-        | Custom Validation Attributes
-        |--------------------------------------------------------------------------
-        |
-        | The following language lines are used to swap our attribute placeholder
-        | with something more reader friendly such as "E-Mail Address" instead
-        | of "email". This simply helps us make our message more expressive.
-        |
-        */
-
-        'attributes' => [],
-    ]
+        'attributes' => [
+        ],
+    ],
 ];
