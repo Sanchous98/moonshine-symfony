@@ -21,9 +21,11 @@
         }
     ],
     "require": {
-        "ext-json": "*",
         "php": "^8.2",
+        "ext-json": "*",
         "illuminate/filesystem": "^10|^11|^12|^13",
+        "illuminate/translation": "^10|^11|^12|^13",
+        "illuminate/validation": "^10|^11|^12|^13",
         "illuminate/view": "^10|^11|^12|^13",
         "lee-to/fast-attributes": "^0.3",
         "moonshine/asset-manager": "4.x-dev",
