@@ -31,6 +31,9 @@ class Article
     #[ORM\Column(nullable: true)]
     private ?int $views = null;
 
+    #[ORM\Column(enumType: ArticleStatus::class)]
+    private ArticleStatus $status = ArticleStatus::Draft;
+
     #[ORM\ManyToOne]
     private ?Category $category = null;
 
@@ -38,12 +41,23 @@ class Article
     #[ORM\ManyToMany(targetEntity: Tag::class)]
     private Collection $tags;
 
-    public function __construct(string $title = '', bool $published = false, ?int $views = null)
+    // a required argument: the bridge must not instantiate entities from filter values
+    public function __construct(string $title, bool $published = false, ?int $views = null)
     {
         $this->title = $title;
         $this->published = $published;
         $this->views = $views;
         $this->tags = new ArrayCollection();
+    }
+
+    public function getStatus(): ArticleStatus
+    {
+        return $this->status;
+    }
+
+    public function setStatus(ArticleStatus $status): void
+    {
+        $this->status = $status;
     }
 
     public function getCategory(): ?Category

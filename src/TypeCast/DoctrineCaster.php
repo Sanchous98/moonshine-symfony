@@ -9,6 +9,8 @@ use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Pagination\AbstractPaginator;
 use MoonShine\Contracts\Core\Paginator\PaginatorContract;
 use MoonShine\Contracts\Core\TypeCasts\DataCasterContract;
+use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
+use MoonShine\Core\TypeCasts\MixedDataWrapper;
 use MoonShine\Crud\TypeCasts\PaginatorCaster;
 
 /**
@@ -36,16 +38,20 @@ final readonly class DoctrineCaster implements DataCasterContract
     }
 
     /**
-     * @return DoctrineDataWrapper<T>
+     * Entities are wrapped as they are, other data (filter values, raw arrays) is not turned into an entity
+     *
+     * @return DoctrineDataWrapper<T>|MixedDataWrapper
      */
-    public function cast(mixed $data): DoctrineDataWrapper
+    public function cast(mixed $data): DataWrapperContract
     {
-        if (! $data instanceof $this->class) {
-            $data = new ($this->class)(...(\is_array($data) ? $data : []));
+        if ($data instanceof $this->class) {
+            return new DoctrineDataWrapper($data, $this->keyName, $this->entityManager);
         }
 
-        /** @var T $data */
-        return new DoctrineDataWrapper($data, $this->keyName, $this->entityManager);
+        $data = \is_array($data) ? $data : [];
+        $key = $data[$this->keyName] ?? null;
+
+        return new MixedDataWrapper($data, \is_int($key) || \is_string($key) ? $key : null);
     }
 
     public function paginatorCast(mixed $data): ?PaginatorContract
