@@ -134,6 +134,7 @@ Index, form and detail pages of a resource are not registered as standalone page
 
 `MoonShine\Symfony\Resources\DoctrineResource` provides CRUD for a Doctrine ORM entity
 (`composer require symfony/orm-pack`): pagination, sorting, search, filters, query tags, ManyToOne/ManyToMany associations through select fields.
+Without a form type, values are written with the PropertyAccess component (setters, adders/removers), see [Forms and validation](#forms-and-validation).
 
 ```php
 namespace App\MoonShine\Resources;
@@ -194,19 +195,47 @@ Override `query()` to add joins or conditions, `fieldApply()` / `filterApply()` 
 For other data sources extend `MoonShine\Crud\Resources\CrudResource` and implement
 `findItem`, `getItems`, `save`, `delete` and `massDelete`, see `tests/Fixtures/Resources/PostResource.php`.
 
-## Validation
+## Forms and validation
 
-Validation rules use the Laravel syntax and are declared on the form page of a resource:
+### Symfony form types
+
+A form page can delegate mapping and validation to a Symfony form type (`composer require symfony/form`).
+The submitted data is handled by the form (data transformers, `EntityType`, adders/removers, constraints of the form and of the entity, `UniqueEntity`),
+MoonShine fields are used for rendering. Fields that are not part of the form type (for example `File`/`Image`) are still applied by MoonShine.
 
 ```php
-use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
-use MoonShine\Crud\Pages\FormPage;
+use MoonShine\Symfony\Pages\SymfonyFormPage;
 
-final class BookFormPage extends FormPage
+final class BookFormPage extends SymfonyFormPage
 {
-    protected function rules(DataWrapperContract $item): array
+    protected function formType(): string
     {
-        return ['title' => ['required', 'string', 'max:255']];
+        return BookType::class;
+    }
+
+    protected function formOptions(): array
+    {
+        return ['validation_groups' => ['Default', 'admin']];
+    }
+}
+```
+
+```php
+final class BookType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            // non nullable setters need an empty_data
+            ->add('title', TextType::class, ['empty_data' => ''])
+            ->add('published', CheckboxType::class, ['required' => false])
+            ->add('author', EntityType::class, ['class' => Author::class, 'required' => false])
+            ->add('tags', EntityType::class, ['class' => Tag::class, 'multiple' => true, 'by_reference' => false]);
+    }
+
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults(['data_class' => Book::class]);
     }
 }
 ```
@@ -219,8 +248,31 @@ protected function pages(): array
 }
 ```
 
+Form children are matched with MoonShine fields by name (`title` field <-> `title` child).
+The form is submitted without a name, CSRF is verified by the bundle for every admin request.
+
+### Constraints without a form type
+
+`FormPage::rules()` may return Symfony constraints, they are checked with the Symfony validator:
+
+```php
+use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
+use MoonShine\Crud\Pages\FormPage;
+use Symfony\Component\Validator\Constraints as Assert;
+
+final class BookFormPage extends FormPage
+{
+    protected function rules(DataWrapperContract $item): array
+    {
+        return ['title' => [new Assert\NotBlank(), new Assert\Length(max: 255)]];
+    }
+}
+```
+
+Laravel style string rules (`'required|max:255'`) are supported as a fallback when `illuminate/validation` is installed.
+
 Async forms receive a `422` response with the errors, regular forms are redirected back with the errors and the submitted values.
-Rules that need a database (`unique`, `exists`) are not supported, check them in the resource or with Symfony constraints.
+Inline edits from the table are validated the same way.
 
 ## Files
 

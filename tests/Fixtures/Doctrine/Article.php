@@ -7,9 +7,12 @@ namespace MoonShine\Symfony\Tests\Fixtures\Doctrine;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'articles')]
+#[UniqueEntity('title')]
 class Article
 {
     #[ORM\Id]
@@ -18,6 +21,8 @@ class Article
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 3)]
     private string $title = '';
 
     #[ORM\Column]
@@ -59,12 +64,16 @@ class Article
         return $this->tags;
     }
 
-    /**
-     * @param Collection<int, Tag> $tags
-     */
-    public function setTags(Collection $tags): void
+    public function addTag(Tag $tag): void
     {
-        $this->tags = $tags;
+        if (! $this->tags->contains($tag)) {
+            $this->tags->add($tag);
+        }
+    }
+
+    public function removeTag(Tag $tag): void
+    {
+        $this->tags->removeElement($tag);
     }
 
     public function getId(): ?int

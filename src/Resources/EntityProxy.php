@@ -6,10 +6,13 @@ namespace MoonShine\Symfony\Resources;
 
 use Closure;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Symfony\Component\PropertyAccess\PropertyAccess;
+use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 
 /**
  * Lets MoonShine fields read and write entity properties with data_get()/data_set()
- * through getters, setters or Doctrine metadata, method calls are forwarded to the entity.
+ * through the PropertyAccess component (getters, setters, adders/removers) or Doctrine metadata,
+ * method calls are forwarded to the entity.
  *
  * @template TEntity of object
  */
@@ -36,36 +39,40 @@ final class EntityProxy
 
     public function __get(string $name): mixed
     {
-        foreach (['get', 'is', 'has'] as $prefix) {
-            if (method_exists($this->entity, $method = $prefix . ucfirst($name))) {
-                return $this->entity->{$method}();
-            }
+        if (self::accessor()->isReadable($this->entity, $name)) {
+            return self::accessor()->getValue($this->entity, $name);
         }
 
         if ($this->metadata->hasField($name) || $this->metadata->hasAssociation($name)) {
             return $this->metadata->getFieldValue($this->entity, $name);
         }
 
-        return property_exists($this->entity, $name) && isset($this->entity->{$name}) ? $this->entity->{$name} : null;
+        return null;
     }
 
+    /**
+     * Writes through setters or adders/removers of collections, mapped properties without accessors are set directly
+     */
     public function __set(string $name, mixed $value): void
     {
         $value = ($this->cast)($name, $value);
 
-        if (method_exists($this->entity, $method = 'set' . ucfirst($name))) {
-            $this->entity->{$method}($value);
+        if (self::accessor()->isWritable($this->entity, $name)) {
+            self::accessor()->setValue($this->entity, $name, $value);
 
             return;
         }
 
         if ($this->metadata->hasField($name) || $this->metadata->hasAssociation($name)) {
             $this->metadata->setFieldValue($this->entity, $name, $value);
-
-            return;
         }
+    }
 
-        $this->entity->{$name} = $value;
+    private static function accessor(): PropertyAccessorInterface
+    {
+        static $accessor = null;
+
+        return $accessor ??= PropertyAccess::createPropertyAccessor();
     }
 
     public function __isset(string $name): bool

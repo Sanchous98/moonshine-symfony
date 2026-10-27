@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\Tests\Fixtures\Doctrine;
 
+use MoonShine\Crud\Pages\DetailPage;
+use MoonShine\Crud\Pages\IndexPage;
 use MoonShine\Crud\QueryTags\QueryTag;
 use MoonShine\Symfony\Resources\DoctrineResource;
 use MoonShine\UI\Fields\ID;
@@ -65,6 +67,11 @@ final class ArticleResource extends DoctrineResource
     protected function search(): array
     {
         return ['id', 'title'];
+    }
+
+    protected function pages(): array
+    {
+        return [IndexPage::class, ArticleFormPage::class, DetailPage::class];
     }
 
     /**

@@ -61,7 +61,8 @@ use MoonShine\Symfony\Security\Auth;
 use MoonShine\Symfony\Security\Csrf;
 use MoonShine\Symfony\Security\CsrfSubscriber;
 use MoonShine\Symfony\Storage\StorageRegistry;
-use MoonShine\Symfony\Validation\Validator;
+use MoonShine\Symfony\Form\FormProcessor;
+use MoonShine\Symfony\Validation\LaravelValidator;
 use MoonShine\UI\Fields\File;
 use MoonShine\UI\Applies\AppliesRegister;
 use Symfony\Component\Cache\Psr16Cache;
@@ -153,7 +154,7 @@ final class MoonShineBundle extends AbstractBundle
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
         if ($builder->hasExtension('framework')) {
-            $builder->prependExtensionConfig('framework', ['csrf_protection' => true]);
+            $builder->prependExtensionConfig('framework', ['csrf_protection' => true, 'validation' => ['enabled' => true]]);
         }
     }
 
@@ -454,9 +455,20 @@ final class MoonShineBundle extends AbstractBundle
 
     private function notifications(ContainerBuilder $builder): void
     {
+        // Laravel style string rules are an optional fallback
+        if (class_exists(\Illuminate\Validation\Factory::class)) {
+            $builder
+                ->register(LaravelValidator::class)
+                ->setAutowired(true);
+        }
+
         $builder
-            ->register(Validator::class)
-            ->setAutowired(true);
+            ->register(FormProcessor::class)
+            ->setArguments([
+                new Reference('validator'),
+                new Reference('form.factory', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+                new Reference(LaravelValidator::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            ]);
 
         $builder
             ->register(MoonShineNotificationContract::class, MemoryNotification::class)

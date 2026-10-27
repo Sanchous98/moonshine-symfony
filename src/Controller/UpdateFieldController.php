@@ -8,10 +8,9 @@ use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
-use MoonShine\Crud\Contracts\Page\FormPageContract;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Symfony\DependencyInjection\Request;
-use MoonShine\Symfony\Validation\Validator;
+use MoonShine\Symfony\Form\FormProcessor;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
@@ -26,7 +25,7 @@ final class UpdateFieldController extends MoonShineController
 {
     public function __construct(
         CoreContract $core,
-        private readonly Validator $validator,
+        private readonly FormProcessor $formProcessor,
     ) {
         parent::__construct($core);
     }
@@ -48,40 +47,34 @@ final class UpdateFieldController extends MoonShineController
             return $this->error('Field not found', Response::HTTP_NOT_FOUND);
         }
 
-        $value = $request->get('value');
-
-        $page = $resource->getFormPage();
-        $rules = $page instanceof FormPageContract ? $page->getRules() : [];
-
-        if (isset($rules[$field->getColumn()])) {
-            $errors = $this->validator->validate(
-                [$field->getColumn() => $value],
-                [$field->getColumn() => $rules[$field->getColumn()]],
-                $page instanceof FormPageContract ? $page->validationMessages() : [],
-                [$field->getColumn() => $field->getLabel()],
-            );
-
-            if ($errors !== []) {
-                return new JsonResponse([
-                    'message' => (string) (array_values($errors)[0][0] ?? 'The given data was invalid.'),
-                    'errors' => $errors,
-                ], Response::HTTP_UNPROCESSABLE_ENTITY);
-            }
+        if (! $request instanceof Request) {
+            return $this->error('MoonShine request is not bound to the Symfony request.', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         // fields read their value by name, the table sends it as "value"
-        if ($request instanceof Request) {
-            $request->getSymfonyRequest()->attributes->set(Request::INPUT_ATTRIBUTE, [
-                $field->getColumn() => $value,
-            ]);
+        $symfonyRequest = $request->getSymfonyRequest();
+        $symfonyRequest->attributes->set(Request::INPUT_ATTRIBUTE, [
+            $field->getColumn() => $request->get('value'),
+        ]);
+
+        $resource->setActivePage($resource->getIndexPage());
+
+        $result = $this->formProcessor->process(
+            $resource,
+            $resource->getItemOrFail(),
+            $symfonyRequest,
+            onlyField: $field->getColumn(),
+        );
+
+        if (! $result->isValid()) {
+            return new JsonResponse([
+                'message' => $result->getFirstError(),
+                'errors' => $result->errors,
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         try {
-            $resource->setActivePage($resource->getIndexPage());
-            $resource->save(
-                $resource->getCaster()->cast($resource->getItemOrFail()),
-                $this->core->getFieldsCollection([$field]),
-            );
+            $resource->save($resource->getCaster()->cast($result->item), $result->fields);
         } catch (Throwable $e) {
             return $this->error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
