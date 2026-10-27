@@ -60,6 +60,7 @@
         "symfony/browser-kit": "^7.1|^8.0",
         "symfony/css-selector": "^7.1|^8.0",
         "symfony/form": "^7.1|^8.0",
+        "symfony/notifier": "^7.1|^8.0",
         "symfony/security-bundle": "^7.1|^8.0"
     },
     "suggest": {
@@ -68,7 +69,8 @@
         "doctrine/doctrine-bundle": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
         "symfony/form": "Map and validate form pages with Symfony form types (SymfonyFormPage)",
         "illuminate/validation": "Laravel style string rules in FormPage::rules()",
-        "league/flysystem-bundle": "Use Flysystem storages (S3, FTP, ...) as MoonShine disks"
+        "league/flysystem-bundle": "Use Flysystem storages (S3, FTP, ...) as MoonShine disks",
+        "symfony/notifier": "Send admin panel notifications through the \"moonshine\" Notifier channel"
     },
     "autoload": {
         "psr-4": {

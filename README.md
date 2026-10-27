@@ -79,6 +79,9 @@ moonshine:
             public:
                 root: '%kernel.project_dir%/public/storage'
                 url: '/storage'
+    notifications:
+        enabled: true
+        pool: 'cache.app'
 ```
 
 ## Authentication
@@ -276,8 +279,104 @@ Inline edits from the table are validated the same way.
 
 ## Files
 
-`File` and `Image` fields store uploads on the configured disks, `dir()` and `disk()` select the location.
+`File` and `Image` fields store uploads with [Flysystem](https://flysystem.thephpleague.com), `dir()` and `disk()` select the location.
 Replaced and removed files are deleted from the disk.
+
+A disk is a local directory or any Flysystem storage registered as a service, for example with `league/flysystem-bundle`:
+
+```yaml
+# config/packages/flysystem.yaml
+flysystem:
+    storages:
+        uploads.storage:
+            adapter: 'aws'
+            options:
+                client: 'aws.s3_client'
+                bucket: 'uploads'
+
+# config/packages/moonshine.yaml
+moonshine:
+    storage:
+        default: s3
+        disks:
+            public:
+                root: '%kernel.project_dir%/public/storage'
+                url: '/storage'
+            s3:
+                service: 'uploads.storage'
+                url: 'https://cdn.example.com'
+```
+
+```php
+Image::make('Cover', 'cover')->disk('s3')->dir('books');
+```
+
+## Events
+
+Resource hooks are dispatched as Symfony events, listen to them like to any other event:
+
+```php
+use MoonShine\Symfony\Event\BeforeUpdatingEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener]
+final class BookListener
+{
+    public function __invoke(BeforeUpdatingEvent $event): void
+    {
+        if (! $event->isFor(BookResource::class)) {
+            return;
+        }
+
+        $book = $event->getData(); // the entity with the submitted values
+        $book->setUpdatedAt(new \DateTimeImmutable());
+    }
+}
+```
+
+| Event | When |
+|---|---|
+| `BeforeCreatingEvent`, `BeforeUpdatingEvent` | the submitted values are mapped, before persisting |
+| `AfterCreatedEvent`, `AfterUpdatedEvent` | after flushing |
+| `BeforeDeletingEvent`, `AfterDeletedEvent` | around deleting an item, throw an exception to prevent the deletion |
+| `BeforeMassDeletingEvent`, `AfterMassDeletedEvent` | around deleting several items, `getIds()` |
+
+`DoctrineResource` dispatches them, other resources `use DispatchesResourceEvents;`.
+A resource that overrides a hook (`beforeCreating()`, ...) must call the parent method to keep the event.
+
+## Notifications
+
+The bell of the admin panel shows notifications of the current user (authentication must be enabled).
+Send them through the `moonshine` channel of Symfony Notifier (`composer require symfony/notifier`):
+
+```php
+use MoonShine\Crud\Notifications\NotificationButton;
+use MoonShine\Symfony\Notifications\AdminRecipient;
+use MoonShine\Symfony\Notifications\MoonShineNotification;
+
+$notifier->send(
+    (new MoonShineNotification('Import finished'))
+        ->button(new NotificationButton('Open', '/admin/resource/book-resource/index-page')),
+    new AdminRecipient('admin@example.com'), // user identifiers, all users when empty
+);
+
+// any notification can use the channel
+$notifier->send(new Notification('Server restarted', ['moonshine', 'email']), new AdminRecipient());
+```
+
+Notifications are kept in a cache pool, configure a persistent one for production:
+
+```yaml
+framework:
+    cache:
+        pools:
+            moonshine.notifications:
+                adapter: cache.adapter.doctrine_dbal
+
+moonshine:
+    notifications:
+        pool: moonshine.notifications
+```
 
 ## Translations
 
@@ -287,7 +386,6 @@ Add other languages to `translations/moonshine.<locale>.php` (or yaml/xlf) of yo
 ## Limitations
 
 - Inline editing of relation fields from the table (`update-field.through-relation`) is not supported.
-- Notifications are kept in memory only.
 - The package has been tested with Symfony 7.4 on PHP 8.3, Symfony 8 requires PHP 8.4 and has not been tested yet.
 
 ## Development
