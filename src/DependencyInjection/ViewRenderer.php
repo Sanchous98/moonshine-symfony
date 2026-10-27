@@ -17,7 +17,9 @@ use Illuminate\View\Engines\EngineResolver;
 use Illuminate\View\Factory;
 use Illuminate\View\FileViewFinder;
 use MoonShine\Contracts\Core\DependencyInjection\ViewRendererContract;
+use MoonShine\Core\Core;
 use MoonShine\Support\AlpineJs;
+use MoonShine\Symfony\Security\Csrf;
 use RuntimeException;
 
 final class ViewRenderer implements ViewRendererContract
@@ -60,7 +62,10 @@ final class ViewRenderer implements ViewRendererContract
         $compiler->componentNamespace('MoonShine\UI\Components', 'moonshine');
         $compiler->anonymousComponentNamespace($components, 'moonshine');
 
-        $compiler->directive('csrf', static fn (): string => '');
+        $compiler->directive(
+            'csrf',
+            static fn (): string => '<?php echo ' . Core::class . '::getInstance()->getContainer(' . Csrf::class . '::class)?->field(); ?>',
+        );
         $compiler->directive(
             'defineEvent',
             static fn (string $e): string => '<?php echo ' . AlpineJs::class . "::eventBlade($e); ?>",

@@ -8,3 +8,10 @@ moonshine:
     pages:
         dashboard: 'App\MoonShine\Pages\Dashboard'
         login: 'App\MoonShine\Pages\LoginPage'
+    auth:
+        # Requires symfony/security-bundle and a configured user provider
+        enabled: false
+        role: 'ROLE_ADMIN'
+        # Register the "moonshine" firewall automatically
+        firewall: true
+        provider: null

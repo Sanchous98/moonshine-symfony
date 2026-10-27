@@ -21,8 +21,8 @@
         }
     ],
     "require": {
-        "php": "^8.2",
         "ext-json": "*",
+        "php": "^8.2",
         "illuminate/filesystem": "^10|^11|^12|^13",
         "illuminate/view": "^10|^11|^12|^13",
         "lee-to/fast-attributes": "^0.3",
@@ -41,13 +41,18 @@
         "symfony/framework-bundle": "^7.1|^8.0",
         "symfony/psr-http-message-bridge": "^7.1|^8.0",
         "symfony/routing": "^7.1|^8.0",
+        "symfony/security-csrf": "^7.1|^8.0",
         "symfony/translation": "^7.1|^8.0"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.5",
         "symfony/browser-kit": "^7.1|^8.0",
-        "symfony/css-selector": "^7.1|^8.0"
+        "symfony/css-selector": "^7.1|^8.0",
+        "symfony/security-bundle": "^7.1|^8.0"
+    },
+    "suggest": {
+        "symfony/security-bundle": "Required for authentication of the admin panel"
     },
     "autoload": {
         "psr-4": {
