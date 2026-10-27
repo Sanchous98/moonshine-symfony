@@ -4,106 +4,118 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\DependencyInjection;
 
+use Composer\InstalledVersions;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\Renderable;
+use Illuminate\Contracts\View\Factory as FactoryContract;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\View\Compilers\BladeCompiler;
-use Illuminate\View\DynamicComponent;
 use Illuminate\View\Engines\CompilerEngine;
 use Illuminate\View\Engines\EngineResolver;
 use Illuminate\View\Factory;
 use Illuminate\View\FileViewFinder;
-use Illuminate\View\View;
 use MoonShine\Contracts\Core\DependencyInjection\ViewRendererContract;
-use Symfony\Component\DependencyInjection\Container as SymfonyContainer;
+use MoonShine\Core\Core;
+use MoonShine\Support\AlpineJs;
+use MoonShine\Symfony\Security\Csrf;
+use RuntimeException;
 
 final class ViewRenderer implements ViewRendererContract
 {
-    public function __construct(private SymfonyContainer $container) {}
+    private ?Factory $factory = null;
+
+    /**
+     * @param list<string> $paths additional view paths
+     */
+    public function __construct(
+        private readonly string $cacheDir,
+        private readonly array $paths = [],
+        private readonly ?string $uiPath = null,
+    ) {}
 
     public function render(string $view, array $data = []): Renderable
     {
-        $projectDir = $this->container->get('kernel')?->getProjectDir();
-        $root = __DIR__ . '/../../vendor/moonshine/ui';
+        return $this->getFactory()->make($view, $data);
+    }
 
-        $path = $root . '/resources/views';
-        $pathAnonymous = $root . '/resources/views/components';
+    public function reset(): void
+    {
+        $this->factory?->flushState();
+    }
 
-        $cache = $projectDir . '/var/cache';
+    private function getFactory(): Factory
+    {
+        if ($this->factory !== null) {
+            return $this->factory;
+        }
 
-        $compiler = new BladeCompiler(
-            files: new Filesystem(),
-            cachePath: $cache,
-        );
+        $views = $this->getUiPath() . '/resources/views';
+        $components = $views . '/components';
+
+        $files = new Filesystem();
+        $files->ensureDirectoryExists($this->cacheDir);
+
+        $compiler = new BladeCompiler(files: $files, cachePath: $this->cacheDir);
 
         $compiler->componentNamespace('MoonShine\UI\Components', 'moonshine');
-        $compiler->anonymousComponentNamespace($pathAnonymous, 'moonshine');
+        $compiler->anonymousComponentNamespace($components, 'moonshine');
 
-
-        $compiler->directive('csrf', fn() => '');
+        $compiler->directive(
+            'csrf',
+            static fn (): string => '<?php echo ' . Core::class . '::getInstance()->getContainer(' . Csrf::class . '::class)?->field(); ?>',
+        );
         $compiler->directive(
             'defineEvent',
-            static fn ($e): string => "<?php echo MoonShine\Support\AlpineJs::eventBlade($e); ?>"
+            static fn (string $e): string => '<?php echo ' . AlpineJs::class . "::eventBlade($e); ?>",
         );
-
         $compiler->directive(
             'defineEventWhen',
-            static fn ($e): string => "<?php echo MoonShine\Support\AlpineJs::eventBladeWhen($e); ?>"
+            static fn (string $e): string => '<?php echo ' . AlpineJs::class . "::eventBladeWhen($e); ?>",
         );
-
-        $blade = new CompilerEngine(
-            compiler: $compiler,
-            files: new Filesystem()
-        );
-
 
         $engines = new EngineResolver();
-        $engines->register('blade', fn () => $blade);
+        $engines->register('blade', static fn (): CompilerEngine => new CompilerEngine($compiler, $files));
 
         $factory = new Factory(
             engines: $engines,
-            finder: new FileViewFinder(
-                files: new Filesystem(),
-                paths: [$path, $pathAnonymous],
-                extensions: ['blade.php']
-            ),
+            finder: new FileViewFinder($files, [...$this->paths, $views, $components], ['blade.php']),
             events: new Dispatcher(),
         );
 
-        $factory = $factory->addNamespace('moonshine', $path);
-        $factory = $factory->addNamespace('moonshine', $pathAnonymous);
-        $factory = $factory->addNamespace(
-            '__components',
-            $projectDir . '/var/cache/compiled'
-        );
+        $factory->addNamespace('moonshine', [$views, $components]);
+        $factory->addNamespace('__components', $this->cacheDir);
 
-        Container::getInstance()->bind(\Illuminate\Contracts\View\Factory::class, fn () => $factory);
-        Container::getInstance()->bind(View::class, fn () => $factory);
-        Container::getInstance()->bind('view.finder', function ($app) {
-            return new FileViewFinder($app['files'], $app['config']['view.paths']);
-        });
-        Container::getInstance()->singleton('blade.compiler', function ($app) {
-            return tap(new BladeCompiler(
-                $app['files'],
-                $app['config']['view.compiled'],
-                $app['config']->get('view.relative_hash', false) ? $app->basePath() : '',
-                $app['config']->get('view.cache', true),
-                $app['config']->get('view.compiled_extension', 'php'),
-            ), function ($blade) {
-                $blade->component('dynamic-component', DynamicComponent::class);
+        // Blade components resolve the factory and the application through the global Laravel container
+        $container = Container::getInstance();
+        $factory->setContainer($container);
+        $container->instance(FactoryContract::class, $factory);
+        $container->instance('view', $factory);
+        $container->instance('blade.compiler', $compiler);
+
+        if (! $container->bound(Application::class)) {
+            $container->instance(Application::class, new class () {
+                public function getNamespace(): string
+                {
+                    return 'App\\';
+                }
             });
-        });
-        Container::getInstance()->bind('view', View::class);
-        Container::getInstance()->bind('config', Configurator::class);
-        Container::getInstance()->bind(Application::class, fn () => new class {
-            public function getNamespace(): string
-            {
-                return 'App';
-            }
-        });
+        }
 
-        return $factory->make($view, $data);
+        return $this->factory = $factory;
+    }
+
+    private function getUiPath(): string
+    {
+        $path = $this->uiPath ?? (InstalledVersions::isInstalled('moonshine/ui')
+            ? InstalledVersions::getInstallPath('moonshine/ui')
+            : null);
+
+        if ($path === null || ! is_dir($path)) {
+            throw new RuntimeException('Package "moonshine/ui" is not installed.');
+        }
+
+        return realpath($path) ?: $path;
     }
 }

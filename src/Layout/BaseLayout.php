@@ -19,7 +19,10 @@ use MoonShine\UI\Components\Layout\Meta;
 use MoonShine\UI\Components\Layout\TopBar;
 use MoonShine\UI\Components\Title;
 use MoonShine\UI\Components\When;
+use MoonShine\Symfony\Components\Profile;
 use MoonShine\Symfony\DependencyInjection\MoonShine;
+use MoonShine\Symfony\Security\Auth;
+use MoonShine\Symfony\Security\Csrf;
 use MoonShine\Contracts\UI\ComponentContract;
 use MoonShine\UI\Components\Breadcrumbs;
 use MoonShine\UI\Components\Components;
@@ -49,7 +52,7 @@ abstract class BaseLayout extends AbstractLayout
         return Head::make([
             Meta::make()->customAttributes([
                 'name' => 'csrf-token',
-                'content' => '',
+                'content' => $this->getCsrf()?->getToken() ?? '',
             ]),
             $this->getFaviconComponent()->bodyColor($this->getColorManager()->get('body')),
 
@@ -72,7 +75,27 @@ abstract class BaseLayout extends AbstractLayout
 
     protected function getProfileComponent(bool $sidebar = false): Fragment
     {
-        return Fragment::make();
+        $auth = $this->getCore()->getContainer(Auth::class);
+
+        if (! $auth instanceof Auth || $auth->getUser() === null) {
+            return Fragment::make();
+        }
+
+        return Fragment::make([
+            Profile::make(
+                $this->getCore()->getRouter()->to('logout'),
+                $auth->getName(),
+                $auth->getUser()->getUserIdentifier(),
+                $auth->getAvatar(),
+            )->class($sidebar ? 'profile--sidebar' : ''),
+        ])->name('profile');
+    }
+
+    protected function getCsrf(): ?Csrf
+    {
+        $csrf = $this->getCore()->getContainer(Csrf::class);
+
+        return $csrf instanceof Csrf && $csrf->isEnabled() ? $csrf : null;
     }
 
     /**
@@ -129,7 +152,7 @@ abstract class BaseLayout extends AbstractLayout
         return [];
     }
 
-    protected function getTopBarComponent(): Topbar
+    protected function getTopBarComponent(): TopBar
     {
         return TopBar::make([
             Fragment::make([
@@ -177,6 +200,9 @@ abstract class BaseLayout extends AbstractLayout
         return Search::make();
     }
 
+    /**
+     * @return array<string, string>
+     */
     protected function getFooterMenu(): array
     {
         return [

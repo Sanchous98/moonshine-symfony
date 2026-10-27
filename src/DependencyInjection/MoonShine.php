@@ -9,34 +9,40 @@ use MoonShine\Contracts\Core\PageContract;
 use MoonShine\Contracts\Core\ResourceContract;
 use MoonShine\Core\Core;
 use MoonShine\Core\Storage\FileStorage;
+use MoonShine\Symfony\Storage\StorageRegistry;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 final class MoonShine extends Core implements ResetInterface
 {
     public function runningUnitTests(): bool
     {
-        return false;
+        return $this->getEnvironment() === 'test';
     }
 
     public function runningInConsole(): bool
     {
-        return false;
+        return \PHP_SAPI === 'cli' || \PHP_SAPI === 'phpdbg';
     }
 
     public function isLocal(): bool
     {
-        return false;
+        return \in_array($this->getEnvironment(), ['dev', 'local'], true);
     }
 
     public function isProduction(): bool
     {
-        return false;
+        return $this->getEnvironment() === 'prod';
     }
 
     public function getContainer(?string $id = null, mixed $default = null, ...$parameters): mixed
     {
-        if($id === null) {
+        if ($id === null) {
             return $this->container;
+        }
+
+        if (! $this->container->has($id)) {
+            return $default;
         }
 
         return $this->container->get($id);
@@ -44,23 +50,39 @@ final class MoonShine extends Core implements ResetInterface
 
     public function getStorage(...$parameters): StorageContract
     {
-        return new FileStorage();
+        $registry = $this->getContainer(StorageRegistry::class);
+
+        if (! $registry instanceof StorageRegistry) {
+            return new FileStorage();
+        }
+
+        $disk = $parameters['disk'] ?? $parameters[0] ?? null;
+
+        return $registry->get(\is_string($disk) ? $disk : null);
     }
 
     public function autoload(?string $namespace = null): static
     {
         $namespace ??= $this->getConfig()->getNamespace();
 
-        $pages = $this->getOptimizer()->getType(PageContract::class, $namespace);
-        $resources = $this->getOptimizer()->getType(ResourceContract::class, $namespace);
-
         return $this
-            ->pages($pages)
-            ->resources($resources);
+            ->pages($this->getOptimizer()->getClassType(PageContract::class, $namespace))
+            ->resources($this->getOptimizer()->getClassType(ResourceContract::class, $namespace));
     }
 
     public function reset(): void
     {
         $this->flushState();
+    }
+
+    private function getEnvironment(): ?string
+    {
+        if (! $this->container instanceof ContainerInterface || ! $this->container->hasParameter('kernel.environment')) {
+            return null;
+        }
+
+        $environment = $this->container->getParameter('kernel.environment');
+
+        return \is_string($environment) ? $environment : null;
     }
 }

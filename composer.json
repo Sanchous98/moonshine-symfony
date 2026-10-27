@@ -1,16 +1,17 @@
 {
     "name": "moonshine/symfony",
-    "description": "MoonShine Symfony",
+    "description": "MoonShine admin panel for Symfony",
     "keywords": [
         "symfony",
-        "moonshine"
+        "moonshine",
+        "admin"
     ],
     "type": "symfony-bundle",
     "homepage": "https://moonshine-laravel.com",
     "license": "MIT",
     "support": {
-        "issues": "https://github.com/moonshine-software/moonshine/symfony/issues",
-        "source": "https://github.com/moonshine-software/moonshine/symfony"
+        "issues": "https://github.com/moonshine-software/symfony/issues",
+        "source": "https://github.com/moonshine-software/symfony"
     },
     "authors": [
         {
@@ -22,23 +23,63 @@
     "require": {
         "php": "^8.2",
         "ext-json": "*",
-        "illuminate/filesystem": "^10|^11|^12",
+        "illuminate/filesystem": "^10|^11|^12|^13",
+        "illuminate/pagination": "^10|^11|^12|^13",
+        "illuminate/view": "^10|^11|^12|^13",
+        "league/flysystem": "^3.0",
+        "league/flysystem-local": "^3.0",
         "lee-to/fast-attributes": "^0.3",
-        "symfony/psr-http-message-bridge": "^7.1|^8.0",
-        "nyholm/psr7": "^1.8",
         "moonshine/asset-manager": "4.x-dev",
         "moonshine/color-manager": "4.x-dev",
-        "moonshine/menu-manager": "4.x-dev",
         "moonshine/contracts": "4.x-dev",
         "moonshine/core": "4.x-dev",
         "moonshine/crud": "4.x-dev",
+        "moonshine/menu-manager": "4.x-dev",
         "moonshine/support": "4.x-dev",
-        "moonshine/ui": "4.x-dev"
+        "moonshine/ui": "4.x-dev",
+        "nyholm/psr7": "^1.8",
+        "symfony/cache": "^7.1|^8.0",
+        "symfony/console": "^7.1|^8.0",
+        "symfony/filesystem": "^7.1|^8.0",
+        "symfony/framework-bundle": "^7.1|^8.0",
+        "symfony/property-access": "^7.1|^8.0",
+        "symfony/psr-http-message-bridge": "^7.1|^8.0",
+        "symfony/routing": "^7.1|^8.0",
+        "symfony/security-csrf": "^7.1|^8.0",
+        "symfony/translation": "^7.1|^8.0",
+        "symfony/validator": "^7.1|^8.0"
+    },
+    "require-dev": {
+        "doctrine/doctrine-bundle": "^2.13",
+        "doctrine/orm": "^3.3",
+        "illuminate/translation": "^10|^11|^12|^13",
+        "illuminate/validation": "^10|^11|^12|^13",
+        "league/flysystem-memory": "^3.0",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5",
+        "symfony/browser-kit": "^7.1|^8.0",
+        "symfony/css-selector": "^7.1|^8.0",
+        "symfony/form": "^7.1|^8.0",
+        "symfony/notifier": "^7.1|^8.0",
+        "symfony/security-bundle": "^7.1|^8.0"
+    },
+    "suggest": {
+        "symfony/security-bundle": "Required for authentication of the admin panel",
+        "doctrine/orm": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
+        "doctrine/doctrine-bundle": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
+        "symfony/form": "Map and validate form pages with Symfony form types (SymfonyFormPage)",
+        "illuminate/validation": "Laravel style string rules in FormPage::rules()",
+        "league/flysystem-bundle": "Use Flysystem storages (S3, FTP, ...) as MoonShine disks",
+        "symfony/notifier": "Send admin panel notifications through the \"moonshine\" Notifier channel"
     },
     "autoload": {
         "psr-4": {
-            "MoonShine\\Symfony\\": "src",
-            "App\\": "src/"
+            "MoonShine\\Symfony\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MoonShine\\Symfony\\Tests\\": "tests"
         }
     },
     "config": {
@@ -50,5 +91,9 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse"
+    }
 }

@@ -1,0 +1,15 @@
+moonshine:
+    # Namespace where pages and resources live
+    namespace: 'App\MoonShine'
+    # URL prefix of the admin panel
+    prefix: '/admin'
+    title: 'MoonShine'
+    locale: 'en'
+    pages:
+        dashboard: 'App\MoonShine\Pages\Dashboard'
+        login: 'App\MoonShine\Pages\LoginPage'
+    auth:
+        # Requires symfony/security-bundle and the "moonshine" firewall,
+        # see vendor/moonshine/symfony/recipe/security.yaml
+        enabled: false
+        role: 'ROLE_ADMIN'

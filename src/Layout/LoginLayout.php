@@ -6,6 +6,7 @@ namespace MoonShine\Symfony\Layout;
 
 use MoonShine\Crud\Traits\WithComponentsPusher;
 use MoonShine\UI\Components\Components;
+use MoonShine\UI\Components\Layout\Flash;
 use MoonShine\UI\Components\FlexibleRender;
 use MoonShine\UI\Components\Heading;
 use MoonShine\UI\Components\Layout\{Body, Div, Html, Layout};
@@ -67,6 +68,8 @@ final class LoginLayout extends BaseLayout
                                     ),
                                 ])->class('description'),
                             ])->class('authentication-header'),
+
+                            Flash::make(),
 
                             Components::make($this->getPage()->getComponents()),
                         ])->class('authentication-content'),

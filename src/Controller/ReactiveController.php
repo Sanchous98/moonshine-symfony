@@ -7,6 +7,7 @@ namespace MoonShine\Symfony\Controller;
 use Illuminate\Support\Collection;
 use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
+use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
 use MoonShine\Contracts\UI\FieldContract;
 use MoonShine\Contracts\UI\FormBuilderContract;
 use MoonShine\Contracts\UI\HasReactivityContract;
@@ -17,19 +18,20 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[AsController]
-#[Route('/admin/reactive/{pageUri}/{resourceUri?}/{resourceItem?}', name: 'moonshine.reactive')]
+#[Route('/reactive/{pageUri}/{resourceUri?}/{resourceItem?}', name: 'moonshine.reactive', methods: ['POST'])]
 final class ReactiveController extends MoonShineController
 {
     public function __invoke(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
-        $page = $crudRequest->getPage();
+        if ($denied = $this->authorizeResourcePage($crudRequest)) {
+            return $denied;
+        }
 
-        /** @var ?FormBuilderContract $form */
-        $form = $page->getComponents()->findForm(
-            $crudRequest->getComponentName()
+        $form = $crudRequest->getPage()->getComponents()->findForm(
+            $crudRequest->getComponentName(),
         );
 
-        if (\is_null($form)) {
+        if (! $form instanceof FormBuilderContract) {
             return new JsonResponse();
         }
 
@@ -40,39 +42,43 @@ final class ReactiveController extends MoonShineController
 
         $casted = null;
         $except = [];
+        $rawValues = $request->get('values', []);
 
-        $values = (new Collection($request->get('values', [])))->map(function (mixed $value, string $column) use ($fields, &$casted, &$except) {
-            $field = $fields->findByColumn($column);
+        $values = (new Collection(\is_array($rawValues) ? $rawValues : []))
+            ->map(static function (mixed $value, string $column) use ($fields, &$casted, &$except): mixed {
+                $field = $fields->findByColumn($column);
 
-            if (! $field instanceof HasReactivityContract) {
-                return $value;
-            }
+                if (! $field instanceof HasReactivityContract) {
+                    return $value;
+                }
 
-            return $field->prepareReactivityValue($value, $casted, $except);
-        });
+                return $field->prepareReactivityValue($value, $casted, $except);
+            });
 
-        $fields->fill(
-            $values->toArray(),
-            // TODO
-            $casted ?: null
-        );
+        $valuesArray = $values->toArray();
+
+        $fields->fill($valuesArray, $casted instanceof DataWrapperContract ? $casted : null);
 
         foreach ($fields as $field) {
             $fields = $field->formName($form->getName())->getReactiveCallback(
                 $fields,
                 data_get($values, $field->getColumn()),
-                $values->toArray(),
+                $valuesArray,
+                [],
             );
         }
 
-        $values = $fields
-            ->mapWithKeys(static fn (FieldContract $field): array => [$field->getColumn() => $field->getReactiveValue()]);
-
-        $fields = $fields->mapWithKeys(
-            static fn (FieldContract $field): array => [$field->getColumn() => (string) FieldsGroup::make([$field])->render()]
+        $values = $fields->mapWithKeys(
+            static fn (FieldContract $field): array => [$field->getColumn() => $field->getReactiveValue()],
         );
 
-        return new JsonResponse(data: [
+        $fields = $fields->mapWithKeys(
+            fn (FieldContract $field): array => [
+                $field->getColumn() => $this->renderToString(FieldsGroup::make([$field])->render()),
+            ],
+        );
+
+        return JsonResponse::make([
             'form' => $form,
             'fields' => $fields,
             'values' => $values,
