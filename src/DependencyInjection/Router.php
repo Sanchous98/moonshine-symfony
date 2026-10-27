@@ -30,7 +30,8 @@ final class Router extends AbstractRouter
 
         $params = array_filter(
             $this->getParams($params),
-            static fn (mixed $value): bool => \is_scalar($value) || $value instanceof \Stringable,
+            // arrays such as filter[...] become nested query parameters
+            static fn (mixed $value): bool => \is_scalar($value) || \is_array($value) || $value instanceof \Stringable,
         );
 
         return $this->withoutContextQuery(

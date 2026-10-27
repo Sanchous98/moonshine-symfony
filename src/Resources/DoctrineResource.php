@@ -99,7 +99,41 @@ abstract class DoctrineResource extends CrudResource
      */
     public function getDataInstance(): object
     {
-        return new ($this->getEntityClass())();
+        $constructor = (new \ReflectionClass($this->getEntityClass()))->getConstructor();
+
+        if ($constructor === null || $constructor->getNumberOfRequiredParameters() === 0) {
+            return new ($this->getEntityClass())();
+        }
+
+        // entities with required constructor arguments: override this method to build a meaningful instance
+        $metadata = $this->getMetadata();
+        $entity = $metadata->newInstance();
+
+        // collections are usually created in the skipped constructor
+        foreach ($metadata->getAssociationNames() as $association) {
+            if (! $metadata->isCollectionValuedAssociation($association)) {
+                continue;
+            }
+
+            $property = self::findProperty($entity, $association);
+
+            if ($property !== null && ! $property->isInitialized($entity)) {
+                $property->setValue($entity, new ArrayCollection());
+            }
+        }
+
+        return $entity;
+    }
+
+    private static function findProperty(object $entity, string $name): ?\ReflectionProperty
+    {
+        for ($class = new \ReflectionClass($entity); $class !== false; $class = $class->getParentClass()) {
+            if ($class->hasProperty($name)) {
+                return $class->getProperty($name);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -349,6 +383,16 @@ abstract class DoctrineResource extends CrudResource
             return $value === '' && $metadata->hasField($property) && $metadata->isNullable($property) ? null : $value;
         }
 
+        $enumType = $metadata->getFieldMapping($property)->enumType ?? null;
+
+        if (\is_string($enumType) && is_subclass_of($enumType, \BackedEnum::class) && (\is_int($value) || \is_string($value))) {
+            return $enumType::tryFrom(\is_numeric($value) && (new \ReflectionEnum($enumType))->getBackingType()?->getName() === 'int' ? (int) $value : $value) ?? $value;
+        }
+
+        if (\is_array($value) && \is_string($enumType) && is_subclass_of($enumType, \BackedEnum::class)) {
+            return array_map(fn (mixed $item): mixed => $this->castValue($property, $item), $value);
+        }
+
         return match ($metadata->getTypeOfField($property)) {
             'integer', 'smallint', 'bigint' => is_numeric($value) ? (int) $value : $value,
             'float' => is_numeric($value) ? (float) $value : $value,
@@ -517,7 +561,13 @@ abstract class DoctrineResource extends CrudResource
             return;
         }
 
-        $builder->addOrderBy($this->qualify($column), strtolower((string) $direction) === 'asc' ? 'ASC' : 'DESC');
+        $ascending = strtolower((string) $direction) === 'asc';
+
+        $builder->addOrderBy($this->qualify($column), match (true) {
+            // Doctrine ORM 3.7+ deprecates string directions
+            enum_exists(\SortDirection::class) => $ascending ? \SortDirection::Ascending : \SortDirection::Descending,
+            default => $ascending ? 'ASC' : 'DESC',
+        });
     }
 
     /**

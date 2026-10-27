@@ -7,11 +7,11 @@ namespace MoonShine\Symfony\Tests\Fixtures\Pages;
 use MoonShine\Core\Attributes\Layout;
 use MoonShine\Crud\Pages\Page;
 use MoonShine\MenuManager\Attributes\SkipMenu;
-use MoonShine\Symfony\Layout\AppLayout;
+use MoonShine\Symfony\Tests\Fixtures\Layouts\TestLayout;
 use MoonShine\UI\Components\Heading;
 
 #[SkipMenu]
-#[Layout(AppLayout::class)]
+#[Layout(TestLayout::class)]
 final class Dashboard extends Page
 {
     protected string $title = 'Dashboard';

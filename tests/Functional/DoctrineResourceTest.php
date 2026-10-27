@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Article;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleEventSubscriber;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleStatus;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Category;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Tag;
 use MoonShine\Symfony\Tests\Fixtures\TestKernel;
@@ -391,5 +392,55 @@ final class DoctrineResourceTest extends WebTestCase
         self::assertResponseStatusCodeSame(500);
         self::assertSame('This article cannot be deleted', json_decode((string) $this->client->getResponse()->getContent(), true)['message'] ?? null);
         self::assertNotNull($this->article(1));
+    }
+
+    public function testFiltersAndBlankFormWorkWithConstructorArguments(): void
+    {
+        $this->client->request('GET', '/admin/resource/article-resource/index-page', [
+            'filter' => ['title' => 'alp', 'status' => 'draft'],
+        ]);
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('Alpha', $this->content());
+        self::assertStringNotContainsString('Gamma', $this->content());
+        // the filter form keeps the submitted values
+        self::assertSelectorExists('input[name="filter[title]"][value="alp"]');
+
+        $this->client->request('GET', '/admin/resource/article-resource/form-page');
+        self::assertResponseIsSuccessful();
+    }
+
+    public function testEnumColumns(): void
+    {
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Alpha', 'status' => 'published']);
+        self::assertResponseIsSuccessful();
+        self::assertSame(ArticleStatus::Published, $this->article(1)?->getStatus());
+
+        // inline edit from the table
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/2', [
+            'field' => 'status',
+            'value' => 'published',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame(ArticleStatus::Published, $this->article(2)?->getStatus());
+
+        $this->client->request('GET', '/admin/resource/article-resource/index-page', ['filter' => ['status' => 'published'], 'sort' => 'title']);
+        self::assertStringContainsString('Alpha', $this->content());
+        self::assertStringContainsString('Beta', $this->content());
+        self::assertStringNotContainsString('Gamma', $this->content());
+    }
+
+    public function testSortingTriggersNoDoctrineDeprecation(): void
+    {
+        \Doctrine\Deprecations\Deprecation::enableTrackingDeprecations();
+        $before = \Doctrine\Deprecations\Deprecation::getTriggeredDeprecations();
+
+        $this->client->request('GET', '/admin/resource/article-resource/index-page', ['sort' => '-title']);
+        self::assertResponseIsSuccessful();
+
+        $new = array_diff_key(\Doctrine\Deprecations\Deprecation::getTriggeredDeprecations(), $before);
+        $sorting = array_filter(array_keys($new), static fn (string $link): bool => str_contains($link, '12227') || str_contains($link, 'order'));
+
+        self::assertSame([], array_values($sorting));
     }
 }

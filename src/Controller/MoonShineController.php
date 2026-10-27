@@ -7,6 +7,11 @@ namespace MoonShine\Symfony\Controller;
 use Illuminate\Contracts\Support\Renderable;
 use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\UI\TableBuilderContract;
+use MoonShine\Crud\JsonResponse;
+use MoonShine\Crud\Resources\CrudResource;
+use MoonShine\Support\Enums\Ability;
+use MoonShine\Support\Enums\Action;
+use MoonShine\Support\Enums\ToastType;
 use MoonShine\Contracts\UI\TableRowContract;
 use Stringable;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -28,6 +33,20 @@ abstract class MoonShineController
     protected function redirect(string $url): RedirectResponse
     {
         return new RedirectResponse($url);
+    }
+
+    /**
+     * Write endpoints check the same permissions as the buttons and pages
+     */
+    protected function denyUnlessAllowed(CrudResource $resource, Action $action, Ability $ability): ?Response
+    {
+        if ($resource->hasAction($action) && $resource->can($ability)) {
+            return null;
+        }
+
+        return JsonResponse::make()
+            ->toast('Access Denied.', ToastType::ERROR)
+            ->setStatusCode(Response::HTTP_FORBIDDEN);
     }
 
     protected function renderToString(mixed $value): string
