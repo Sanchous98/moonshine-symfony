@@ -11,12 +11,16 @@ use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleFormPage;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleResource;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleType;
+use League\Flysystem\Filesystem;
+use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+
+use function Symfony\Component\DependencyInjection\Loader\Configurator\inline_service;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\AttributeServicesLoader;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
@@ -76,6 +80,7 @@ final class TestKernel extends Kernel
             'storage' => [
                 'disks' => [
                     'public' => ['root' => '%kernel.cache_dir%/storage', 'url' => '/storage'],
+                    'memory' => ['service' => 'test.memory_filesystem', 'url' => 'https://cdn.example.com'],
                 ],
             ],
             'pages' => [
@@ -142,7 +147,10 @@ final class TestKernel extends Kernel
         }
 
         $container->services()
-            ->set('logger', NullLogger::class);
+            ->set('logger', NullLogger::class)
+            ->set('test.memory_filesystem', Filesystem::class)
+                ->args([inline_service(InMemoryFilesystemAdapter::class)])
+                ->public();
 
         $container->services()
             ->defaults()->autowire()->autoconfigure()

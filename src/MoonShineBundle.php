@@ -68,6 +68,7 @@ use MoonShine\UI\Applies\AppliesRegister;
 use Symfony\Component\Cache\Psr16Cache;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
+use Symfony\Component\DependencyInjection\Compiler\ServiceLocatorTagPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
@@ -131,8 +132,22 @@ final class MoonShineBundle extends AbstractBundle
                             ->useAttributeAsKey('name')
                             ->arrayPrototype()
                                 ->children()
-                                    ->scalarNode('root')->isRequired()->end()
-                                    ->scalarNode('url')->isRequired()->end()
+                                    ->scalarNode('root')
+                                        ->info('Local directory of the disk')
+                                        ->defaultNull()
+                                    ->end()
+                                    ->scalarNode('service')
+                                        ->info('Flysystem FilesystemOperator service, e.g. a league/flysystem-bundle storage')
+                                        ->defaultNull()
+                                    ->end()
+                                    ->scalarNode('url')
+                                        ->info('Public URL of the disk, the Flysystem "public_url" is used when null')
+                                        ->defaultNull()
+                                    ->end()
+                                ->end()
+                                ->validate()
+                                    ->ifTrue(static fn (array $disk): bool => ($disk['root'] === null) === ($disk['service'] === null))
+                                    ->thenInvalid('A disk needs either "root" or "service".')
                                 ->end()
                             ->end()
                             ->defaultValue([
@@ -444,12 +459,24 @@ final class MoonShineBundle extends AbstractBundle
      */
     private function storage(array $config, ContainerBuilder $builder): void
     {
-        /** @var array{default: string, disks: array<string, array{root: string, url: string}>} $storage */
+        /** @var array{default: string, disks: array<string, array{root: ?string, service: ?string, url: ?string}>} $storage */
         $storage = $config['storage'];
+
+        $services = [];
+
+        foreach ($storage['disks'] as $disk) {
+            if (($disk['service'] ?? null) !== null) {
+                $services[$disk['service']] = new Reference($disk['service']);
+            }
+        }
 
         $builder
             ->register(StorageRegistry::class)
-            ->setArguments([$storage['disks'], $storage['default']])
+            ->setArguments([
+                $storage['disks'],
+                $storage['default'],
+                ServiceLocatorTagPass::register($builder, $services),
+            ])
             ->setPublic(true);
     }
 
