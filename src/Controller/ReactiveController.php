@@ -23,6 +23,10 @@ final class ReactiveController extends MoonShineController
 {
     public function __invoke(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
+        if ($denied = $this->authorizeResourcePage($crudRequest)) {
+            return $denied;
+        }
+
         $form = $crudRequest->getPage()->getComponents()->findForm(
             $crudRequest->getComponentName(),
         );

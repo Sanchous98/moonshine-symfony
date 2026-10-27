@@ -443,4 +443,25 @@ final class DoctrineResourceTest extends WebTestCase
 
         self::assertSame([], array_values($sorting));
     }
+
+    public function testInlineUpdateRequiresUpdateOnPreviewField(): void
+    {
+        // an index field without updateOnPreview()
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/1', [
+            'field' => 'views',
+            'value' => '999',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame(10, $this->article(1)?->getViews());
+
+        // a form only field is not an index field
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/1', [
+            'field' => 'category',
+            'value' => '2',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('News', $this->article(1)?->getCategory()?->getName());
+    }
 }

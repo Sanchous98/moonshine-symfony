@@ -17,6 +17,10 @@ final class ComponentController extends MoonShineController
 {
     public function __invoke(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
+        if ($denied = $this->authorizeResourcePage($crudRequest)) {
+            return $denied;
+        }
+
         $component = $crudRequest->getPage()->getComponents()->findByName(
             $crudRequest->getComponentName(),
         );

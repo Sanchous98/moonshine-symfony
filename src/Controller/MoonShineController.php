@@ -6,11 +6,13 @@ namespace MoonShine\Symfony\Controller;
 
 use Illuminate\Contracts\Support\Renderable;
 use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
+use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\UI\TableBuilderContract;
 use MoonShine\Crud\JsonResponse;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Support\Enums\Ability;
 use MoonShine\Support\Enums\Action;
+use MoonShine\Support\Enums\PageType;
 use MoonShine\Support\Enums\ToastType;
 use MoonShine\Contracts\UI\TableRowContract;
 use Stringable;
@@ -44,6 +46,42 @@ abstract class MoonShineController
             return null;
         }
 
+        return $this->accessDenied();
+    }
+
+    /**
+     * Async endpoints of a resource page (components, reactive fields) require the access of the page itself
+     */
+    protected function authorizeResourcePage(CrudRequestContract $crudRequest): ?Response
+    {
+        $resource = $crudRequest->getResource();
+
+        if (! $resource instanceof CrudResource) {
+            return null;
+        }
+
+        $ability = match ($crudRequest->getPage()->getPageType()) {
+            PageType::DETAIL => Ability::VIEW,
+            PageType::FORM => $resource->getItemID() === null ? Ability::CREATE : Ability::UPDATE,
+            default => Ability::VIEW_ANY,
+        };
+
+        $action = match ($ability) {
+            Ability::VIEW_ANY => null,
+            Ability::CREATE => Action::CREATE,
+            Ability::UPDATE => Action::UPDATE,
+            default => Action::VIEW,
+        };
+
+        if (($action === null || $resource->hasAction($action)) && $resource->can($ability)) {
+            return null;
+        }
+
+        return $this->accessDenied();
+    }
+
+    protected function accessDenied(): Response
+    {
         return JsonResponse::make()
             ->toast('Access Denied.', ToastType::ERROR)
             ->setStatusCode(Response::HTTP_FORBIDDEN);

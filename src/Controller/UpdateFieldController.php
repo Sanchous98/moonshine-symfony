@@ -10,6 +10,7 @@ use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Support\Enums\Ability;
+use MoonShine\UI\Contracts\HasUpdateOnPreviewContract;
 use MoonShine\Support\Enums\Action;
 use MoonShine\Symfony\DependencyInjection\Request;
 use MoonShine\Symfony\Form\FormProcessor;
@@ -47,6 +48,10 @@ final class UpdateFieldController extends MoonShineController
 
         if ($field === null) {
             return $this->error('Field not found', Response::HTTP_NOT_FOUND);
+        }
+
+        if (! $field instanceof HasUpdateOnPreviewContract || ! $field->isUpdateOnPreview()) {
+            return $this->accessDenied();
         }
 
         if (! $request instanceof Request) {
@@ -96,17 +101,12 @@ final class UpdateFieldController extends MoonShineController
         return $this->error('Updating relation fields from the table is not supported', Response::HTTP_NOT_IMPLEMENTED);
     }
 
+    /**
+     * Like MoonShine for Laravel: only index fields marked with updateOnPreview() can be saved from the table
+     */
     private function findField(CrudResource $resource, string $column): ?FieldContract
     {
-        foreach ([$resource->getIndexFields(), $resource->getFormFields()] as $fields) {
-            $field = $fields->onlyFields()->findByColumn($column);
-
-            if ($field !== null) {
-                return $field;
-            }
-        }
-
-        return null;
+        return $resource->getIndexFields()->withoutWrappers()->findByColumn($column);
     }
 
     private function error(string $message, int $status): JsonResponse
