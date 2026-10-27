@@ -12,19 +12,19 @@ use Symfony\Component\Routing\Attribute\Route;
 #[AsController]
 final class PageController extends MoonShineController
 {
-    #[Route('/admin/page/{pageUri}', name: 'moonshine.page')]
+    #[Route('/page/{pageUri}', name: 'moonshine.page', methods: ['GET'])]
     public function default(CrudRequestContract $crudRequest): Response
     {
-        return new Response(
-            $crudRequest->getPage()->render(),
-        );
+        return $this->response($crudRequest->getPage()->render());
     }
 
-    #[Route('/admin/resource/{resourceUri}/{pageUri}/{resourceItem?}', name: 'moonshine.resource.page')]
+    #[Route('/resource/{resourceUri}/{pageUri}/{resourceItem?}', name: 'moonshine.resource.page', methods: ['GET'])]
     public function resource(CrudRequestContract $crudRequest): Response
     {
-        return new Response(
-            $crudRequest->getPage()->render(),
-        );
+        if (! $crudRequest->hasResource()) {
+            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('MoonShine resource not found');
+        }
+
+        return $this->response($crudRequest->getPage()->render());
     }
 }

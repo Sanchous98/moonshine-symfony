@@ -11,7 +11,6 @@ use MoonShine\Crud\JsonResponse;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Support\Enums\ToastType;
 use MoonShine\UI\Enums\HtmlMode;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
@@ -20,79 +19,72 @@ use Throwable;
 #[AsController]
 final class CrudController extends MoonShineController
 {
-    #[Route('/admin/resource/{resourceUri}/crud/mass-delete', name: 'moonshine.crud.massDelete', methods: ['POST'])]
+    #[Route('/resource/{resourceUri}/crud/mass-delete', name: 'moonshine.crud.massDelete', methods: ['POST', 'DELETE'])]
     public function massDelete(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
         $resource = $crudRequest->getResource();
 
-        if ($resource === null) {
-            return JsonResponse::make()->toast('Resource not found', ToastType::ERROR);
+        if (! $resource instanceof CrudResource) {
+            return $this->resourceNotFound();
         }
 
-        $resource->setActivePage(
-            $resource->getIndexPage(),
-        );
+        $resource->setActivePage($resource->getIndexPage());
 
-        $resource->massDelete($request->get('ids', []));
+        $ids = $request->get('ids', []);
+
+        $resource->massDelete(\is_array($ids) ? array_values(array_filter(
+            $ids,
+            static fn (mixed $id): bool => \is_int($id) || \is_string($id),
+        )) : []);
 
         return JsonResponse::make()
-            ->toast('Deleted successfully')
+            ->toast($this->trans('moonshine::ui.deleted'))
             ->redirect($resource->getIndexPageUrl());
     }
 
-    #[Route('/admin/resource/{resourceUri}/crud', name: 'moonshine.crud.store', methods: ['POST'])]
+    #[Route('/resource/{resourceUri}/crud', name: 'moonshine.crud.store', methods: ['POST'])]
     public function store(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
         return $this->storeOrUpdate($crudRequest, $request);
     }
 
-    #[Route('/admin/resource/{resourceUri}/crud/{resourceItem}/update', name: 'moonshine.crud.update', methods: ['POST'])]
+    #[Route('/resource/{resourceUri}/crud/{resourceItem}/update', name: 'moonshine.crud.update', methods: ['POST', 'PUT'])]
     public function update(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
         return $this->storeOrUpdate($crudRequest, $request);
     }
 
-    #[Route('/admin/resource/{resourceUri}/crud/{resourceItem}/delete', name: 'moonshine.crud.destroy', methods: ['POST'])]
-    public function destroy(CrudRequestContract $crudRequest, RequestContract $request): Response
+    #[Route('/resource/{resourceUri}/crud/{resourceItem}/delete', name: 'moonshine.crud.destroy', methods: ['POST', 'DELETE'])]
+    public function destroy(CrudRequestContract $crudRequest): Response
     {
         $resource = $crudRequest->getResource();
 
-        if ($resource === null) {
-            return JsonResponse::make()->toast('Resource not found', ToastType::ERROR);
+        if (! $resource instanceof CrudResource) {
+            return $this->resourceNotFound();
         }
 
-        $resource->setActivePage(
-            $resource->getIndexPage(),
-        );
+        $resource->setActivePage($resource->getIndexPage());
 
         $resource->delete(
-            $resource->getCaster()->cast(
-                $resource->getItemOrFail(),
-            ),
+            $resource->getCaster()->cast($resource->getItemOrFail()),
         );
 
-        return JsonResponse::make()->toast('Deleted')
-            ->redirect(
-                $resource->getIndexPageUrl(),
-            );
+        return JsonResponse::make()
+            ->toast($this->trans('moonshine::ui.deleted'))
+            ->redirect($resource->getIndexPageUrl());
     }
 
     private function storeOrUpdate(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
         $resource = $crudRequest->getResource();
 
-        if ($resource === null) {
-            return JsonResponse::make()->toast(
-                'Resource not found',
-                ToastType::ERROR,
-            );
+        if (! $resource instanceof CrudResource) {
+            return $this->resourceNotFound();
         }
 
         $item = $resource->getItemOrInstance();
 
-        $resource->setActivePage(
-            $resource->getFormPage(),
-        );
+        $resource->setActivePage($resource->getFormPage());
 
         $redirectRoute = static function (CrudResource $resource) use ($request): ?string {
             if ($request->has('_without-redirect')) {
@@ -101,22 +93,18 @@ final class CrudController extends MoonShineController
 
             $redirect = $request->get('_redirect', $resource->getRedirectAfterSave());
 
-            if (\is_null($redirect) && ! $resource->isCreateInModal() && $resource->isRecentlyCreated()) {
+            if ($redirect === null && ! $resource->isCreateInModal() && $resource->isRecentlyCreated()) {
                 return $resource->getFormPageUrl($resource->getCastedData());
             }
 
-            return $redirect;
+            return \is_string($redirect) ? $redirect : null;
         };
 
         try {
-            $item = $resource->save(
-                $resource->getCaster()->cast(
-                    $item,
-                ),
-            );
+            $item = $resource->save($resource->getCaster()->cast($item));
         } catch (Throwable $e) {
             return $resource->modifyErrorResponse(
-                new Response($e->getMessage(), 500),
+                JsonResponse::make()->toast($e->getMessage(), ToastType::ERROR)->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR),
                 $e,
             );
         }
@@ -134,9 +122,7 @@ final class CrudController extends MoonShineController
                 ->fillCloned($castedData?->toArray() ?? [], $castedData)
                 ->each(function (FieldContract $field) use (&$data): void {
                     $data['htmlData'][] = [
-                        'html' => (string)$field
-                            ->resolveRefreshAfterApply()
-                            ->render(),
+                        'html' => $this->renderToString($field->resolveRefreshAfterApply()->render()),
                         'selector' => "[data-field-selector='{$field->getNameDot()}']",
                         'htmlMode' => HtmlMode::OUTER_HTML->value,
                     ];
@@ -146,24 +132,31 @@ final class CrudController extends MoonShineController
 
             return $resource->modifySaveResponse(
                 JsonResponse::make($data)
-                    ->toast('Saved')
+                    ->toast($this->trans('moonshine::ui.saved'))
                     ->when(
-                        $redirect,
-                        static fn(JsonResponse $response): JsonResponse => $response->redirect($redirect),
+                        $redirect !== null,
+                        static fn (JsonResponse $response): JsonResponse => $response->redirect((string) $redirect),
                     )
                     ->setStatusCode($resource->isRecentlyCreated() ? Response::HTTP_CREATED : Response::HTTP_OK),
             );
         }
 
-
-        if (\is_null($redirectRoute($resource))) {
-            return new RedirectResponse(
-                $resource->getFormPageUrl($resource->getCastedData()),
-            );
-        }
-
-        return new RedirectResponse(
-            $redirectRoute($resource),
+        return $this->redirect(
+            $redirectRoute($resource) ?? $resource->getFormPageUrl($resource->getCastedData()),
         );
+    }
+
+    private function resourceNotFound(): Response
+    {
+        return JsonResponse::make()
+            ->toast('Resource not found', ToastType::ERROR)
+            ->setStatusCode(Response::HTTP_NOT_FOUND);
+    }
+
+    private function trans(string $key): string
+    {
+        $value = $this->core->getTranslator()->get($key);
+
+        return \is_string($value) ? $value : $key;
     }
 }

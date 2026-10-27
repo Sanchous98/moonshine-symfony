@@ -7,21 +7,31 @@ namespace MoonShine\Symfony;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\RouteCollection;
 
-class Routing extends Loader
+final class Routing extends Loader
 {
-    public function load($resource, ?string $type = null): RouteCollection
+    public function __construct(private readonly string $prefix = '/admin')
     {
-        $routes = new RouteCollection();
+        parent::__construct();
+    }
 
-        $importedRoutes = $this->import('@moonshine/config/routes.php', 'php');
+    public function load(mixed $resource, ?string $type = null): RouteCollection
+    {
+        /** @var RouteCollection $routes */
+        $routes = $this->import(\dirname(__DIR__) . '/src/Controller/', 'attribute');
 
-        $routes->addCollection($importedRoutes);
+        $routes->addPrefix($this->prefix);
+
+        foreach ($routes as $route) {
+            if ($route->getPath() !== '/' && str_ends_with($route->getPath(), '/')) {
+                $route->setPath(rtrim($route->getPath(), '/'));
+            }
+        }
 
         return $routes;
     }
 
-    public function supports($resource, ?string $type = null): bool
+    public function supports(mixed $resource, ?string $type = null): bool
     {
-        return 'moonshine.routes' === $type;
+        return $type === 'moonshine.routes';
     }
 }
