@@ -109,4 +109,42 @@ final class FileUploadTest extends WebTestCase
         self::assertResponseStatusCodeSame(500);
         self::assertArrayNotHasKey('cover', PostResource::$items[1]);
     }
+
+    public function testFlysystemServiceDisk(): void
+    {
+        // the in-memory filesystem lives in the container
+        $this->client->disableReboot();
+        $token = $this->token();
+
+        $this->client->request(
+            'POST',
+            '/admin/resource/post-resource/crud/1/update',
+            ['_token' => $token, 'title' => 'Docs'],
+            ['attachments' => [$this->upload('a.txt', 'A'), $this->upload('b.txt', 'B')]],
+        );
+
+        self::assertResponseRedirects();
+
+        /** @var \League\Flysystem\FilesystemOperator $filesystem */
+        $filesystem = self::getContainer()->get('test.memory_filesystem');
+        $stored = PostResource::$items[1]['attachments'] ?? [];
+
+        self::assertCount(2, $stored);
+        self::assertSame('A', $filesystem->read($stored[0]));
+        self::assertSame('B', $filesystem->read($stored[1]));
+
+        $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
+        self::assertStringContainsString('https://cdn.example.com/' . $stored[0], (string) $this->client->getResponse()->getContent());
+
+        // keep the first file only
+        $this->client->request('POST', '/admin/resource/post-resource/crud/1/update', [
+            '_token' => $token,
+            'title' => 'Docs',
+            'hidden_attachments' => [$stored[0]],
+        ]);
+
+        self::assertSame([$stored[0]], PostResource::$items[1]['attachments']);
+        self::assertTrue($filesystem->fileExists($stored[0]));
+        self::assertFalse($filesystem->fileExists($stored[1]));
+    }
 }
