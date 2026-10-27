@@ -30,7 +30,7 @@ final class ArticleResource extends DoctrineResource
     {
         return [
             ID::make()->sortable(),
-            Text::make('Title', 'title')->sortable(),
+            Text::make('Title', 'title')->sortable()->updateOnPreview(),
             Switcher::make('Published', 'published'),
             Number::make('Views', 'views'),
         ];

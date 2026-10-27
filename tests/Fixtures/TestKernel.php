@@ -67,6 +67,11 @@ final class TestKernel extends Kernel
             'namespace' => 'MoonShine\Symfony\Tests\Fixtures',
             'prefix' => $this->environment === 'prefixed' ? '/backoffice/panel' : '/admin',
             'auth' => ['enabled' => $this->environment === 'auth'],
+            'storage' => [
+                'disks' => [
+                    'public' => ['root' => '%kernel.cache_dir%/storage', 'url' => '/storage'],
+                ],
+            ],
             'pages' => [
                 'dashboard' => Dashboard::class,
                 'login' => LoginPage::class,

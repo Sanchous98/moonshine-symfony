@@ -142,7 +142,7 @@ final class Configurator implements ConfiguratorContract
 
     public function getDisk(): string
     {
-        return '';
+        return $this->getString('storage.default', 'public');
     }
 
     public function getDiskOptions(): array
