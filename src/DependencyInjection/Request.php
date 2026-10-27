@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MoonShine\Symfony\DependencyInjection;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use MoonShine\Core\AbstractRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
@@ -18,11 +19,50 @@ final class Request extends AbstractRequest
 
     private const FLASHES_ATTRIBUTE = '_moonshine_flashes';
 
+    private const UNTRIMMED = ['password', 'password_confirmation', 'current_password'];
+
+    /** @var Collection<array-key, mixed>|null */
+    private ?Collection $normalized = null;
+
     public function __construct(
         ServerRequestInterface $request,
         private readonly SymfonyRequest $symfonyRequest,
     ) {
         parent::__construct($request);
+    }
+
+    /**
+     * Request data normalized the way MoonShine fields expect it in Laravel
+     * (TrimStrings and ConvertEmptyStringsToNull middlewares)
+     *
+     * @return Collection<array-key, mixed>
+     */
+    public function getAll(): Collection
+    {
+        return $this->normalized ??= parent::getAll()->map(
+            fn (mixed $value, int|string $key): mixed => $this->normalize($value, (string) $key),
+        );
+    }
+
+    private function normalize(mixed $value, string $key): mixed
+    {
+        if (\is_array($value)) {
+            foreach ($value as $nestedKey => $nested) {
+                $value[$nestedKey] = $this->normalize($nested, (string) $nestedKey);
+            }
+
+            return $value;
+        }
+
+        if (! \is_string($value)) {
+            return $value;
+        }
+
+        if (! \in_array($key, self::UNTRIMMED, true)) {
+            $value = trim($value);
+        }
+
+        return $value === '' ? null : $value;
     }
 
     public function getSymfonyRequest(): SymfonyRequest
