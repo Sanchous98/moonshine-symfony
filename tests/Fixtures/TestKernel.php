@@ -7,6 +7,8 @@ namespace MoonShine\Symfony\Tests\Fixtures;
 use MoonShine\Symfony\MoonShineBundle;
 use MoonShine\Symfony\Tests\Fixtures\Pages\Dashboard;
 use MoonShine\Symfony\Tests\Fixtures\Pages\LoginPage;
+use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleResource;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
@@ -26,6 +28,10 @@ final class TestKernel extends Kernel
 
         if ($this->environment === 'auth') {
             yield new SecurityBundle();
+        }
+
+        if ($this->environment === 'doctrine') {
+            yield new DoctrineBundle();
         }
 
         yield new MoonShineBundle();
@@ -81,6 +87,26 @@ final class TestKernel extends Kernel
                     ],
                 ],
             ]);
+        }
+
+        if ($this->environment === 'doctrine') {
+            $container->extension('doctrine', [
+                'dbal' => ['url' => 'sqlite:///%kernel.cache_dir%/test.db'],
+                'orm' => [
+                    'mappings' => [
+                        'Tests' => [
+                            'type' => 'attribute',
+                            'dir' => __DIR__ . '/Doctrine',
+                            'prefix' => 'MoonShine\Symfony\Tests\Fixtures\Doctrine',
+                            'is_bundle' => false,
+                        ],
+                    ],
+                ],
+            ]);
+
+            $container->services()
+                ->defaults()->autowire()->autoconfigure()
+                ->set(ArticleResource::class);
         }
 
         $container->services()

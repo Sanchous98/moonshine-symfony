@@ -24,6 +24,7 @@
         "php": "^8.2",
         "ext-json": "*",
         "illuminate/filesystem": "^10|^11|^12|^13",
+        "illuminate/pagination": "^10|^11|^12|^13",
         "illuminate/translation": "^10|^11|^12|^13",
         "illuminate/validation": "^10|^11|^12|^13",
         "illuminate/view": "^10|^11|^12|^13",
@@ -47,6 +48,8 @@
         "symfony/translation": "^7.1|^8.0"
     },
     "require-dev": {
+        "doctrine/doctrine-bundle": "^2.13",
+        "doctrine/orm": "^3.3",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.5",
         "symfony/browser-kit": "^7.1|^8.0",
@@ -54,7 +57,9 @@
         "symfony/security-bundle": "^7.1|^8.0"
     },
     "suggest": {
-        "symfony/security-bundle": "Required for authentication of the admin panel"
+        "symfony/security-bundle": "Required for authentication of the admin panel",
+        "doctrine/orm": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource",
+        "doctrine/doctrine-bundle": "Required for MoonShine\\Symfony\\Resources\\DoctrineResource"
     },
     "autoload": {
         "psr-4": {
