@@ -9,6 +9,8 @@ use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
 use MoonShine\Crud\Resources\CrudResource;
+use MoonShine\Support\Enums\Ability;
+use MoonShine\Support\Enums\Action;
 use MoonShine\Symfony\DependencyInjection\Request;
 use MoonShine\Symfony\Form\FormProcessor;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -59,9 +61,15 @@ final class UpdateFieldController extends MoonShineController
 
         $resource->setActivePage($resource->getIndexPage());
 
+        $item = $resource->getItemOrFail();
+
+        if ($denied = $this->denyUnlessAllowed($resource->setItem($item), Action::UPDATE, Ability::UPDATE)) {
+            return $denied;
+        }
+
         $result = $this->formProcessor->process(
             $resource,
-            $resource->getItemOrFail(),
+            $item,
             $symfonyRequest,
             onlyField: $field->getColumn(),
         );

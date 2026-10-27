@@ -10,6 +10,8 @@ use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
 use MoonShine\Crud\JsonResponse;
 use MoonShine\Crud\Resources\CrudResource;
+use MoonShine\Support\Enums\Ability;
+use MoonShine\Support\Enums\Action;
 use MoonShine\Support\Enums\ToastType;
 use MoonShine\Symfony\DependencyInjection\Request;
 use MoonShine\Symfony\Form\FormProcessor;
@@ -42,6 +44,10 @@ final class CrudController extends MoonShineController
 
         if (! $resource instanceof CrudResource) {
             return $this->resourceNotFound();
+        }
+
+        if ($denied = $this->denyUnlessAllowed($resource, Action::MASS_DELETE, Ability::MASS_DELETE)) {
+            return $denied;
         }
 
         $resource->setActivePage($resource->getIndexPage());
@@ -87,6 +93,10 @@ final class CrudController extends MoonShineController
 
         $item = $resource->getItemOrFail();
 
+        if ($denied = $this->denyUnlessAllowed($resource->setItem($item), Action::DELETE, Ability::DELETE)) {
+            return $denied;
+        }
+
         try {
             $resource->delete($resource->getCaster()->cast($item));
         } catch (Throwable $e) {
@@ -106,7 +116,16 @@ final class CrudController extends MoonShineController
             return $this->resourceNotFound();
         }
 
-        $item = $resource->getItemOrInstance();
+        $exists = $crudRequest->getItemID() !== null;
+        $item = $exists ? $resource->getItemOrFail() : $resource->getDataInstance();
+
+        $denied = $exists
+            ? $this->denyUnlessAllowed($resource->setItem($item), Action::UPDATE, Ability::UPDATE)
+            : $this->denyUnlessAllowed($resource, Action::CREATE, Ability::CREATE);
+
+        if ($denied !== null) {
+            return $denied;
+        }
 
         $resource->setActivePage($resource->getFormPage());
 

@@ -159,7 +159,8 @@ final class TestKernel extends Kernel
         $container->services()
             ->defaults()->autowire()->autoconfigure()
             ->load('MoonShine\\Symfony\\Tests\\Fixtures\\Pages\\', __DIR__ . '/Pages/')
-            ->load('MoonShine\\Symfony\\Tests\\Fixtures\\Resources\\', __DIR__ . '/Resources/');
+            ->load('MoonShine\\Symfony\\Tests\\Fixtures\\Resources\\', __DIR__ . '/Resources/')
+            ->load('MoonShine\\Symfony\\Tests\\Fixtures\\Layouts\\', __DIR__ . '/Layouts/');
     }
 
     protected function configureRoutes(RoutingConfigurator $routes): void

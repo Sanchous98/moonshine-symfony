@@ -11,6 +11,9 @@ use MoonShine\Contracts\UI\FieldContract;
 use MoonShine\Crud\Pages\DetailPage;
 use MoonShine\Crud\Pages\IndexPage;
 use MoonShine\Crud\Resources\CrudResource;
+use MoonShine\Support\Enums\Ability;
+use MoonShine\Support\Enums\Action;
+use MoonShine\Support\ListOf;
 use MoonShine\Symfony\Tests\Fixtures\Pages\PostFormPage;
 use MoonShine\Support\Attributes\AsyncMethod;
 use MoonShine\UI\Fields\File;
@@ -41,8 +44,27 @@ final class PostResource extends CrudResource
         ];
     }
 
+    /** @var list<Ability> abilities refused by isCan() */
+    public static array $denied = [];
+
+    /** @var list<Action>|null */
+    public static ?array $actions = null;
+
+    protected function isCan(Ability $ability): bool
+    {
+        return ! \in_array($ability, self::$denied, true);
+    }
+
+    protected function activeActions(): ListOf
+    {
+        return self::$actions === null ? parent::activeActions() : new ListOf(Action::class, self::$actions);
+    }
+
     public static function seed(): void
     {
+        self::$denied = [];
+        self::$actions = null;
+
         self::$items = [
             1 => ['id' => 1, 'title' => 'First post'],
             2 => ['id' => 2, 'title' => 'Second post'],
