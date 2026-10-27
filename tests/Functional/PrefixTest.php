@@ -31,4 +31,20 @@ final class PrefixTest extends WebTestCase
         $client->request('GET', '/admin');
         self::assertResponseStatusCodeSame(404);
     }
+
+    public function testRoutesAreRegisteredOnlyWithPrefix(): void
+    {
+        self::bootKernel();
+
+        /** @var \Symfony\Component\Routing\RouterInterface $router */
+        $router = self::getContainer()->get('router');
+
+        foreach ($router->getRouteCollection() as $name => $route) {
+            if (str_starts_with($name, 'moonshine.')) {
+                self::assertStringStartsWith('/admin', $route->getPath(), $name);
+            }
+        }
+
+        self::assertSame('/admin', $router->getRouteCollection()->get('moonshine.index')?->getPath());
+    }
 }

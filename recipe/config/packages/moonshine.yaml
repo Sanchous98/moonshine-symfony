@@ -9,9 +9,7 @@ moonshine:
         dashboard: 'App\MoonShine\Pages\Dashboard'
         login: 'App\MoonShine\Pages\LoginPage'
     auth:
-        # Requires symfony/security-bundle and a configured user provider
+        # Requires symfony/security-bundle and the "moonshine" firewall,
+        # see vendor/moonshine/symfony/recipe/security.yaml
         enabled: false
         role: 'ROLE_ADMIN'
-        # Register the "moonshine" firewall automatically
-        firewall: true
-        provider: null

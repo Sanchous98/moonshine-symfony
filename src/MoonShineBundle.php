@@ -25,7 +25,6 @@ use MoonShine\Contracts\Core\PageContract;
 use MoonShine\Contracts\Core\ResourceContract;
 use MoonShine\Contracts\MenuManager\MenuAutoloaderContract;
 use MoonShine\Contracts\MenuManager\MenuManagerContract;
-use MoonShine\Core\Collections\OptimizerCollection;
 use MoonShine\Core\Support\CacheAttributes;
 use MoonShine\Crud\Collections\Fields;
 use MoonShine\Crud\Contracts\Notifications\MoonShineNotificationContract;
@@ -55,6 +54,8 @@ use MoonShine\Symfony\DependencyInjection\Router;
 use MoonShine\Symfony\DependencyInjection\Translator;
 use MoonShine\Symfony\DependencyInjection\ViewRenderer;
 use MoonShine\Symfony\Layout\AppLayout;
+use MoonShine\Symfony\Optimizer\OptimizerCacheWarmer;
+use MoonShine\Symfony\Optimizer\OptimizerCollection;
 use MoonShine\Symfony\Security\AccessSubscriber;
 use MoonShine\Symfony\Security\Auth;
 use MoonShine\Symfony\Security\Csrf;
@@ -70,7 +71,6 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
-use Symfony\Component\PropertyAccess\PropertyAccessor;
 
 final class MoonShineBundle extends AbstractBundle
 {
@@ -120,14 +120,6 @@ final class MoonShineBundle extends AbstractBundle
                             ->info('Role required to access the panel, null allows any authenticated user')
                             ->defaultValue('ROLE_ADMIN')
                         ->end()
-                        ->booleanNode('firewall')
-                            ->info('Register the "moonshine" firewall automatically')
-                            ->defaultTrue()
-                        ->end()
-                        ->scalarNode('provider')
-                            ->info('User provider of the firewall, the first configured provider is used when null')
-                            ->defaultNull()
-                        ->end()
                     ->end()
                 ->end()
                 ->arrayNode('storage')
@@ -163,44 +155,6 @@ final class MoonShineBundle extends AbstractBundle
         if ($builder->hasExtension('framework')) {
             $builder->prependExtensionConfig('framework', ['csrf_protection' => true]);
         }
-
-        $config = array_replace_recursive([], ...$builder->getExtensionConfig('moonshine'));
-        $auth = $config['auth'] ?? [];
-
-        if (! ($auth['enabled'] ?? false) || ! ($auth['firewall'] ?? true) || ! $builder->hasExtension('security')) {
-            return;
-        }
-
-        $prefix = '/' . trim((string) ($config['prefix'] ?? '/admin'), '/');
-
-        $firewall = array_filter([
-            'pattern' => '^' . preg_quote($prefix, '#') . '(/|$)',
-            'provider' => $auth['provider'] ?? null,
-            'form_login' => [
-                'login_path' => 'moonshine.login',
-                'check_path' => 'moonshine.authenticate',
-                'default_target_path' => 'moonshine.index',
-                'username_parameter' => 'username',
-                'password_parameter' => 'password',
-                'enable_csrf' => (bool) ($config['csrf'] ?? true),
-                'csrf_parameter' => Csrf::FIELD,
-                'csrf_token_id' => Csrf::TOKEN_ID,
-            ],
-            'logout' => [
-                'path' => 'moonshine.logout',
-                'target' => 'moonshine.login',
-            ],
-            // remember me signatures rely on symfony/property-access
-            'remember_me' => class_exists(PropertyAccessor::class) ? [
-                'secret' => '%kernel.secret%',
-                'remember_me_parameter' => 'remember',
-                'path' => $prefix,
-            ] : null,
-        ], static fn (mixed $value): bool => $value !== null);
-
-        $builder->prependExtensionConfig('security', [
-            'firewalls' => ['moonshine' => $firewall],
-        ]);
     }
 
     public function build(ContainerBuilder $container): void
@@ -295,10 +249,11 @@ final class MoonShineBundle extends AbstractBundle
             ->args(['%moonshine.prefix%'])
             ->tag('routing.loader');
 
+        // not autoconfigured: #[Route] would register them in "routing.controllers" without the prefix
         $services
             ->load('MoonShine\\Symfony\\Controller\\', $this->getPath() . '/src/Controller/*')
             ->autowire()
-            ->autoconfigure();
+            ->tag('controller.service_arguments');
     }
 
     private function request(ContainerBuilder $builder): void
@@ -465,10 +420,17 @@ final class MoonShineBundle extends AbstractBundle
             ->setArguments([new Reference('cache.app')]);
 
         $builder
-            ->register(OptimizerCollectionContract::class, OptimizerCollection::class)
+            ->register(OptimizerCollection::class)
             ->setArgument('$cachePath', '%moonshine.cache_dir%/optimizer.php')
-            ->setPublic(true)
-            ->setAutowired(true);
+            ->setArgument('$config', new Reference(ConfiguratorContract::class))
+            ->setPublic(true);
+
+        $builder->setAlias(OptimizerCollectionContract::class, OptimizerCollection::class)->setPublic(true);
+
+        $builder
+            ->register(OptimizerCacheWarmer::class)
+            ->setArgument('$optimizer', new Reference(OptimizerCollection::class))
+            ->addTag('kernel.cache_warmer');
 
         $builder
             ->register(CacheAttributesContract::class, CacheAttributes::class)
