@@ -56,6 +56,7 @@ use MoonShine\Symfony\Security\AccessSubscriber;
 use MoonShine\Symfony\Security\Auth;
 use MoonShine\Symfony\Security\Csrf;
 use MoonShine\Symfony\Security\CsrfSubscriber;
+use MoonShine\Symfony\Validation\Validator;
 use MoonShine\UI\Applies\AppliesRegister;
 use Symfony\Component\Cache\Psr16Cache;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -328,38 +329,28 @@ final class MoonShineBundle extends AbstractBundle
             ->autoconfigure()
             ->public();
 
-        $builder
-            ->register(IndexPageContract::class, IndexPage::class)
-            ->setShared(false)
-            ->setPublic(true)
-            ->setAutowired(true);
+        $pages = [
+            IndexPageContract::class => IndexPage::class,
+            FormPageContract::class => FormPage::class,
+            DetailPageContract::class => DetailPage::class,
+        ];
 
-        $builder
-            ->register(DefaultListComponent::class)
-            ->setPublic(true)
-            ->setAutowired(true);
+        foreach ($pages as $contract => $class) {
+            $builder
+                ->register($class)
+                ->setShared(false)
+                ->setPublic(true)
+                ->setAutowired(true);
 
-        $builder
-            ->register(DetailPageContract::class, DetailPage::class)
-            ->setShared(false)
-            ->setPublic(true)
-            ->setAutowired(true);
+            $builder->setAlias($contract, $class)->setPublic(true);
+        }
 
-        $builder
-            ->register(DefaultDetailComponent::class)
-            ->setPublic(true)
-            ->setAutowired(true);
-
-        $builder
-            ->register(FormPageContract::class, FormPage::class)
-            ->setShared(false)
-            ->setPublic(true)
-            ->setAutowired(true);
-
-        $builder
-            ->register(DefaultForm::class)
-            ->setPublic(true)
-            ->setAutowired(true);
+        foreach ([DefaultListComponent::class, DefaultDetailComponent::class, DefaultForm::class] as $component) {
+            $builder
+                ->register($component)
+                ->setPublic(true)
+                ->setAutowired(true);
+        }
     }
 
     private function view(ContainerBuilder $builder): void
@@ -442,6 +433,10 @@ final class MoonShineBundle extends AbstractBundle
 
     private function notifications(ContainerBuilder $builder): void
     {
+        $builder
+            ->register(Validator::class)
+            ->setAutowired(true);
+
         $builder
             ->register(MoonShineNotificationContract::class, MemoryNotification::class)
             ->setPublic(true)

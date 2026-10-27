@@ -233,4 +233,52 @@ final class CrudTest extends WebTestCase
         self::assertSame('hello-world', $json['values']['slug'] ?? null);
         self::assertArrayHasKey('slug', $json['fields'] ?? []);
     }
+
+    public function testAsyncValidationErrors(): void
+    {
+        $this->ajax('/admin/resource/post-resource/crud/1/update', ['title' => 'ab']);
+
+        self::assertResponseStatusCodeSame(422);
+        $json = json_decode((string) $this->client->getResponse()->getContent(), true);
+
+        self::assertSame('The Title must be at least 3 characters.', $json['message']);
+        self::assertSame(['title' => ['The Title must be at least 3 characters.']], $json['errors']);
+        self::assertSame('First post', PostResource::$items[1]['title']);
+    }
+
+    public function testValidationErrorsAreShownInForm(): void
+    {
+        $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
+        $this->client->request('POST', '/admin/resource/post-resource/crud/1/update', [
+            '_token' => $this->token(),
+            '_component_name' => 'post-resource',
+            'title' => '',
+        ], server: ['HTTP_REFERER' => '/admin/resource/post-resource/form-page/1']);
+
+        self::assertResponseRedirects('/admin/resource/post-resource/form-page/1');
+
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('form[action="/admin/resource/post-resource/crud/1/update"]', 'The Title field is required.');
+
+        // errors are flashed only once
+        $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
+        self::assertSelectorTextNotContains('body', 'The Title field is required.');
+    }
+
+    public function testOldInputIsRestored(): void
+    {
+        $this->token();
+        $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
+        $this->post('/admin/resource/post-resource/crud/1/update', ['_component_name' => 'post-resource', 'title' => 'ab']);
+        $crawler = $this->client->followRedirect();
+
+        self::assertSame('ab', $crawler->filter('input[name="title"]')->attr('value'));
+    }
+
+    public function testResourceFormPageIsNotRegisteredGlobally(): void
+    {
+        $this->client->request('GET', '/admin/page/post-form-page');
+
+        self::assertResponseStatusCodeSame(404);
+    }
 }

@@ -8,7 +8,10 @@ use Illuminate\Support\Collection;
 use MoonShine\Contracts\Core\DependencyInjection\FieldsContract;
 use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
 use MoonShine\Contracts\UI\FieldContract;
+use MoonShine\Crud\Pages\DetailPage;
+use MoonShine\Crud\Pages\IndexPage;
 use MoonShine\Crud\Resources\CrudResource;
+use MoonShine\Symfony\Tests\Fixtures\Pages\PostFormPage;
 use MoonShine\Support\Attributes\AsyncMethod;
 use MoonShine\UI\Fields\ID;
 use MoonShine\UI\Fields\Text;
@@ -27,6 +30,15 @@ final class PostResource extends CrudResource
     protected string $title = 'Posts';
 
     protected ?string $casterKeyName = 'id';
+
+    protected function pages(): array
+    {
+        return [
+            IndexPage::class,
+            PostFormPage::class,
+            DetailPage::class,
+        ];
+    }
 
     public static function seed(): void
     {
