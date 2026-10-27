@@ -57,7 +57,10 @@ final readonly class Endpoints extends AbstractEndpoints
         return $this->router->to('index');
     }
 
-    private function resolve(string $class): ?object
+    /**
+     * @param class-string<PageContract|ResourceContract> $class
+     */
+    private function resolve(string $class): PageContract|ResourceContract|null
     {
         return Core::getInstance()->getInstances($class);
     }

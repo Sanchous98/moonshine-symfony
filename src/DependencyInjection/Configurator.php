@@ -108,13 +108,16 @@ final class Configurator implements ConfiguratorContract
     }
 
     /**
-     * @return array<string, class-string<PageContract>>
+     * @return list<class-string<PageContract>>
      */
     public function getPages(): array
     {
         $pages = $this->get('pages', []);
 
-        return \is_array($pages) ? $pages : [];
+        return \is_array($pages) ? array_values(array_filter(
+            $pages,
+            static fn (mixed $page): bool => \is_string($page) && is_subclass_of($page, PageContract::class),
+        )) : [];
     }
 
     /**
