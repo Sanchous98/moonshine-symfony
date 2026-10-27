@@ -8,18 +8,23 @@ use MoonShine\Contracts\Core\Paginator\PaginatorContract;
 use MoonShine\Contracts\Core\TypeCasts\DataCasterContract;
 
 /**
- * @template  T of object
+ * @template T of object
  *
  * @implements DataCasterContract<T>
  */
 final readonly class DoctrineCaster implements DataCasterContract
 {
+    /**
+     * @param class-string<T> $class
+     */
     public function __construct(
-        /** @var class-string<T> $class */
         private string $class,
+        private string $keyName = 'id',
     ) {}
 
-    /** @return class-string<T> $class */
+    /**
+     * @return class-string<T>
+     */
     public function getClass(): string
     {
         return $this->class;
@@ -30,14 +35,12 @@ final readonly class DoctrineCaster implements DataCasterContract
      */
     public function cast(mixed $data): DoctrineDataWrapper
     {
-        /** @var T $item */
-        if(\is_array($data)) {
-            $data = new ($this->getClass())(...$data);
+        if (! $data instanceof $this->class) {
+            $data = new ($this->class)(...(\is_array($data) ? $data : []));
         }
 
-        /** @var DoctrineDataWrapper<T> */
-        /** @noRector */
-        return new DoctrineDataWrapper($data);
+        /** @var T $data */
+        return new DoctrineDataWrapper($data, $this->keyName);
     }
 
     public function paginatorCast(mixed $data): ?PaginatorContract
