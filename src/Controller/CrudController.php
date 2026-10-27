@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\Controller;
 
+use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
+use MoonShine\Crud\Contracts\Page\FormPageContract;
 use MoonShine\Crud\JsonResponse;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Support\Enums\ToastType;
+use MoonShine\Symfony\DependencyInjection\Request;
+use MoonShine\Symfony\Validation\Validator;
 use MoonShine\UI\Enums\HtmlMode;
+use Symfony\Component\HttpFoundation\JsonResponse as SymfonyJsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 use Throwable;
@@ -19,6 +25,13 @@ use Throwable;
 #[AsController]
 final class CrudController extends MoonShineController
 {
+    public function __construct(
+        CoreContract $core,
+        private readonly Validator $validator,
+    ) {
+        parent::__construct($core);
+    }
+
     #[Route('/resource/{resourceUri}/crud/mass-delete', name: 'moonshine.crud.massDelete', methods: ['POST', 'DELETE'])]
     public function massDelete(CrudRequestContract $crudRequest, RequestContract $request): Response
     {
@@ -86,6 +99,12 @@ final class CrudController extends MoonShineController
 
         $resource->setActivePage($resource->getFormPage());
 
+        $errors = $this->validate($resource, $request);
+
+        if ($errors !== []) {
+            return $this->validationFailed($resource, $request, $errors);
+        }
+
         $redirectRoute = static function (CrudResource $resource) use ($request): ?string {
             if ($request->has('_without-redirect')) {
                 return null;
@@ -144,6 +163,63 @@ final class CrudController extends MoonShineController
         return $this->redirect(
             $redirectRoute($resource) ?? $resource->getFormPageUrl($resource->getCastedData()),
         );
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function validate(CrudResource $resource, RequestContract $request): array
+    {
+        $page = $resource->getFormPage();
+
+        if (! $page instanceof FormPageContract) {
+            return [];
+        }
+
+        $page->prepareForValidation();
+
+        $attributes = [];
+
+        foreach ($resource->getFormFields()->onlyFields() as $field) {
+            $attributes[$field->getNameDot()] = $field->getLabel();
+        }
+
+        return $this->validator->validate(
+            $request->getAll()->toArray(),
+            $page->getRules(),
+            $page->validationMessages(),
+            $attributes,
+        );
+    }
+
+    /**
+     * @param array<string, list<string>> $errors
+     */
+    private function validationFailed(CrudResource $resource, RequestContract $request, array $errors): Response
+    {
+        if ($request->isAjax() || $request->isWantsJson()) {
+            return new SymfonyJsonResponse([
+                'message' => (string) (array_values($errors)[0][0] ?? 'The given data was invalid.'),
+                'errors' => $errors,
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $symfonyRequest = $request instanceof Request ? $request->getSymfonyRequest() : null;
+        $session = $symfonyRequest?->hasSession() ? $symfonyRequest->getSession() : null;
+
+        if ($session instanceof FlashBagAwareSessionInterface) {
+            $formName = $request->getScalar('_component_name');
+            $formName = \is_string($formName) && $formName !== '' ? $formName : $resource->getUriKey();
+
+            $session->getFlashBag()->add(Request::ERRORS_KEY, [$formName => $errors]);
+            $session->getFlashBag()->add(Request::OLD_INPUT_KEY, $request->getExcept(['_token', 'password']));
+        }
+
+        $back = $symfonyRequest?->headers->get('referer');
+
+        return $this->redirect(\is_string($back) && $back !== ''
+            ? $back
+            : $resource->getFormPageUrl($resource->getCastedData()));
     }
 
     private function resourceNotFound(): Response
