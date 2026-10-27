@@ -34,6 +34,8 @@ use Symfony\Contracts\Service\Attribute\Required;
  */
 abstract class DoctrineResource extends CrudResource
 {
+    use DispatchesResourceEvents;
+
     public const ALIAS = 'e';
 
     /** @var class-string<TEntity> */
@@ -244,7 +246,6 @@ abstract class DoctrineResource extends CrudResource
         $fields ??= $this->getFormFields()->onlyFields();
         $fields->fill($item->toArray(), $item);
 
-        $item = $isNew ? $this->beforeCreating($item) : $this->beforeUpdating($item);
         $entity = $item->getOriginal();
 
         // fields write with data_set(), the proxy maps it to setters or mapped properties
@@ -259,6 +260,11 @@ abstract class DoctrineResource extends CrudResource
         });
 
         $entity = $this->unwrap($target, $entity);
+
+        // like Doctrine prePersist/preUpdate: listeners see the submitted values
+        $item = $this->getCaster()->cast($entity);
+        $item = $isNew ? $this->beforeCreating($item) : $this->beforeUpdating($item);
+        $entity = $item->getOriginal();
 
         $manager->persist($entity);
         $manager->flush();
