@@ -16,6 +16,7 @@ use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
+use Symfony\Component\Routing\Loader\AttributeServicesLoader;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 
 final class TestKernel extends Kernel
@@ -81,6 +82,25 @@ final class TestKernel extends Kernel
 
         if ($this->environment === 'auth') {
             $container->extension('security', [
+                'firewalls' => [
+                    'moonshine' => [
+                        'pattern' => '^/admin',
+                        'provider' => 'users',
+                        'form_login' => [
+                            'login_path' => 'moonshine.login',
+                            'check_path' => 'moonshine.authenticate',
+                            'default_target_path' => 'moonshine.index',
+                            'username_parameter' => 'username',
+                            'password_parameter' => 'password',
+                            'enable_csrf' => true,
+                            'csrf_parameter' => '_token',
+                            'csrf_token_id' => 'moonshine',
+                        ],
+                        'logout' => ['path' => 'moonshine.logout', 'target' => 'moonshine.login'],
+                        'remember_me' => ['secret' => '%kernel.secret%', 'remember_me_parameter' => 'remember'],
+                    ],
+                    'main' => ['lazy' => true, 'provider' => 'users'],
+                ],
                 'password_hashers' => [InMemoryUser::class => 'plaintext'],
                 'providers' => [
                     'users' => [
@@ -127,5 +147,10 @@ final class TestKernel extends Kernel
     protected function configureRoutes(RoutingConfigurator $routes): void
     {
         $routes->import('.', 'moonshine.routes');
+
+        // like the Symfony skeleton, must not register MoonShine controllers twice
+        if (class_exists(AttributeServicesLoader::class)) {
+            $routes->import('routing.controllers');
+        }
     }
 }
