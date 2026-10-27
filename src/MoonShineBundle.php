@@ -45,6 +45,7 @@ use MoonShine\Symfony\Applies\FileApply;
 use MoonShine\Symfony\Command\InstallCommand;
 use MoonShine\Symfony\DependencyInjection\AssetResolver;
 use MoonShine\Symfony\EventSubscriber\ExceptionSubscriber;
+use MoonShine\Symfony\EventSubscriber\LocaleSubscriber;
 use MoonShine\Symfony\DependencyInjection\Configurator;
 use MoonShine\Symfony\DependencyInjection\CrudRequest;
 use MoonShine\Symfony\DependencyInjection\MoonShine;
@@ -94,6 +95,8 @@ final class MoonShineBundle extends AbstractBundle
                 ->scalarNode('palette')->defaultValue(NeutralPalette::class)->end()
                 ->scalarNode('locale')->defaultValue('en')->end()
                 ->arrayNode('locales')
+                    ->info('Locales of the switcher, a list of codes or code => label')
+                    ->normalizeKeys(false)
                     ->scalarPrototype()->end()
                     ->defaultValue([])
                 ->end()
@@ -266,6 +269,11 @@ final class MoonShineBundle extends AbstractBundle
 
         $builder
             ->register(ExceptionSubscriber::class)
+            ->addTag('kernel.event_subscriber');
+
+        $builder
+            ->register(LocaleSubscriber::class)
+            ->setArguments([new Reference(ConfiguratorContract::class), $config['locale']])
             ->addTag('kernel.event_subscriber');
     }
 
