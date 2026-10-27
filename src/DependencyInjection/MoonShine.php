@@ -9,6 +9,7 @@ use MoonShine\Contracts\Core\PageContract;
 use MoonShine\Contracts\Core\ResourceContract;
 use MoonShine\Core\Core;
 use MoonShine\Core\Storage\FileStorage;
+use MoonShine\Symfony\Storage\StorageRegistry;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -49,7 +50,15 @@ final class MoonShine extends Core implements ResetInterface
 
     public function getStorage(...$parameters): StorageContract
     {
-        return new FileStorage();
+        $registry = $this->getContainer(StorageRegistry::class);
+
+        if (! $registry instanceof StorageRegistry) {
+            return new FileStorage();
+        }
+
+        $disk = $parameters['disk'] ?? $parameters[0] ?? null;
+
+        return $registry->get(\is_string($disk) ? $disk : null);
     }
 
     public function autoload(?string $namespace = null): static

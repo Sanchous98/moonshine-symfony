@@ -224,6 +224,7 @@ abstract class DoctrineResource extends CrudResource
         $entity = $item->getOriginal();
 
         $fields ??= $this->getFormFields()->onlyFields();
+        $fields->fill($item->toArray(), $item);
         $fields->each(static fn (FieldContract $field): mixed => $field->afterDestroy($entity));
 
         $manager = $this->getEntityManager();
