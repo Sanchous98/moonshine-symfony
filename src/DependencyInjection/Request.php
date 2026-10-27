@@ -8,12 +8,15 @@ use Illuminate\Support\Arr;
 use MoonShine\Core\AbstractRequest;
 use Psr\Http\Message\ServerRequestInterface;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 
 final class Request extends AbstractRequest
 {
     public const OLD_INPUT_KEY = '_moonshine_old_input';
 
     public const ERRORS_KEY = '_moonshine_errors';
+
+    private const FLASHES_ATTRIBUTE = '_moonshine_flashes';
 
     public function __construct(
         ServerRequestInterface $request,
@@ -39,15 +42,16 @@ final class Request extends AbstractRequest
             return $session->get($key);
         }
 
-        if (method_exists($session, 'getFlashBag')) {
-            $flashes = $session->getFlashBag()->peek($key);
+        // flashes are consumed once and kept for the rest of the request
+        $flashes = $this->symfonyRequest->attributes->get(self::FLASHES_ATTRIBUTE, []);
 
-            if ($flashes !== []) {
-                return $flashes[array_key_last($flashes)];
-            }
+        if (! \array_key_exists($key, $flashes) && $session instanceof FlashBagAwareSessionInterface) {
+            $messages = $session->getFlashBag()->get($key);
+            $flashes[$key] = $messages === [] ? null : $messages[array_key_last($messages)];
+            $this->symfonyRequest->attributes->set(self::FLASHES_ATTRIBUTE, $flashes);
         }
 
-        return $default;
+        return $flashes[$key] ?? $default;
     }
 
     /**
