@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MoonShine\Symfony\TypeCast;
 
+use Doctrine\ORM\EntityManagerInterface;
 use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
 use ReflectionObject;
 use ReflectionProperty;
@@ -21,6 +22,7 @@ final readonly class DoctrineDataWrapper implements DataWrapperContract
     public function __construct(
         private object $entity,
         private string $keyName = 'id',
+        private ?EntityManagerInterface $entityManager = null,
     ) {}
 
     /**
@@ -51,7 +53,44 @@ final readonly class DoctrineDataWrapper implements DataWrapperContract
             }
         }
 
+        return $this->withAssociationKeys($data);
+    }
+
+    /**
+     * Associations are represented by identifiers, the way select fields expect them
+     *
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    private function withAssociationKeys(array $data): array
+    {
+        if ($this->entityManager === null || ! $this->entityManager->getMetadataFactory()->hasMetadataFor($this->entity::class)) {
+            return $data;
+        }
+
+        $metadata = $this->entityManager->getClassMetadata($this->entity::class);
+
+        foreach ($metadata->getAssociationNames() as $association) {
+            $value = $data[$association] ?? null;
+
+            if ($value === null) {
+                continue;
+            }
+
+            $data[$association] = is_iterable($value)
+                ? array_values(array_map($this->identify(...), iterator_to_array($value)))
+                : $this->identify($value);
+        }
+
         return $data;
+    }
+
+    private function identify(object $entity): mixed
+    {
+        $identifier = $this->entityManager?->getUnitOfWork()->getSingleIdentifierValue($entity);
+
+        return $identifier ?? $this->entityManager?->getClassMetadata($entity::class)->getIdentifierValues($entity);
     }
 
     private function read(string $name): mixed

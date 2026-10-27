@@ -43,6 +43,7 @@ use MoonShine\MenuManager\MenuAutoloader;
 use MoonShine\MenuManager\MenuManager;
 use MoonShine\Symfony\Command\InstallCommand;
 use MoonShine\Symfony\DependencyInjection\AssetResolver;
+use MoonShine\Symfony\EventSubscriber\ExceptionSubscriber;
 use MoonShine\Symfony\DependencyInjection\Configurator;
 use MoonShine\Symfony\DependencyInjection\CrudRequest;
 use MoonShine\Symfony\DependencyInjection\MoonShine;
@@ -236,6 +237,10 @@ final class MoonShineBundle extends AbstractBundle
         $builder
             ->register(CsrfSubscriber::class)
             ->setAutowired(true)
+            ->addTag('kernel.event_subscriber');
+
+        $builder
+            ->register(ExceptionSubscriber::class)
             ->addTag('kernel.event_subscriber');
     }
 
