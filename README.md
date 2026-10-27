@@ -2,9 +2,6 @@
 
 Integration of the [MoonShine](https://github.com/moonshine-software/moonshine) admin panel with the **Symfony framework**.
 
-> The package is still in development: authentication and a Doctrine based resource are not implemented yet.
-> See [Limitations](#limitations).
-
 ## Requirements
 
 - PHP **8.2+**
@@ -12,7 +9,7 @@ Integration of the [MoonShine](https://github.com/moonshine-software/moonshine) 
 
 ## Installation
 
-Until the package is published on Packagist, install it from a `path` or `vcs` repository:
+Until the package is published on Packagist, install it from a `vcs` (or `path`) repository:
 
 ```json
 "repositories": [
@@ -27,7 +24,7 @@ Until the package is published on Packagist, install it from a `path` or `vcs` r
 composer require moonshine/symfony:4.x-dev
 ```
 
-Register the bundle (Flex does it automatically) in `config/bundles.php`:
+Register the bundle in `config/bundles.php`:
 
 ```php
 return [
@@ -49,7 +46,7 @@ It creates:
 - `src/MoonShine/Pages/Dashboard.php` and `src/MoonShine/Pages/LoginPage.php`
 - `public/vendor/moonshine` - a symlink to the MoonShine UI assets (use `--copy` to copy them instead)
 
-Existing files are kept, pass `--force` to overwrite them.
+Existing files are kept, pass `--force` to overwrite them. The admin panel is available at `/admin`.
 
 ## Configuration
 
@@ -64,28 +61,182 @@ moonshine:
     layout: 'MoonShine\Symfony\Layout\AppLayout'
     palette: 'MoonShine\ColorManager\Palettes\NeutralPalette'
     locale: 'en'
-    locales: []
+    # locale switcher: a list of codes or code => label
+    locales: { en: 'English', de: 'Deutsch' }
     pages:
         dashboard: 'App\MoonShine\Pages\Dashboard'
         login: 'App\MoonShine\Pages\LoginPage'
     forms: []
+    auth:
+        enabled: false
+        # role required to open the panel, null allows any authenticated user
+        role: 'ROLE_ADMIN'
+    # CSRF protection of admin requests
+    csrf: true
+    storage:
+        default: public
+        disks:
+            public:
+                root: '%kernel.project_dir%/public/storage'
+                url: '/storage'
 ```
+
+## Authentication
+
+Authentication uses Symfony Security (`composer require symfony/security-bundle`).
+
+1. Enable it in `config/packages/moonshine.yaml`:
+
+    ```yaml
+    moonshine:
+        auth:
+            enabled: true
+            role: 'ROLE_ADMIN'
+    ```
+
+2. Add the `moonshine` firewall to `config/packages/security.yaml` **before** the `main` firewall
+   (the installer prints the same snippet, it is also available in `recipe/security.yaml`):
+
+    ```yaml
+    security:
+        firewalls:
+            moonshine:
+                pattern: ^/admin
+                provider: app_user_provider
+                form_login:
+                    login_path: moonshine.login
+                    check_path: moonshine.authenticate
+                    default_target_path: moonshine.index
+                    username_parameter: username
+                    password_parameter: password
+                    enable_csrf: true
+                    csrf_parameter: _token
+                    csrf_token_id: moonshine
+                logout:
+                    path: moonshine.logout
+                    target: moonshine.login
+                remember_me:
+                    secret: '%kernel.secret%'
+                    remember_me_parameter: remember
+    ```
+
+Every admin route except login and logout requires the configured role, independently of `access_control`.
+The profile block shows `getName()`, `getFullName()` or `getDisplayName()` of the user when available,
+and `getAvatar()` for the picture.
 
 ## Pages and resources
 
-Any service implementing `MoonShine\Contracts\Core\PageContract` or `MoonShine\Contracts\Core\ResourceContract` is registered in the admin panel automatically,
-as long as it is autoconfigured. With the default `config/services.yaml` everything under `src/` already is.
+Any service implementing `MoonShine\Contracts\Core\PageContract` or `MoonShine\Contracts\Core\ResourceContract` is registered in the admin panel,
+as long as it is autoconfigured (with the default `config/services.yaml` everything under `src/` is).
+Index, form and detail pages of a resource are not registered as standalone pages.
 
-Resources extend `MoonShine\Crud\Resources\CrudResource` and implement data access
-(`findItem`, `getItems`, `save`, `delete`, `massDelete`). See `tests/Fixtures/Resources/PostResource.php` for a minimal example.
+### Doctrine resources
+
+`MoonShine\Symfony\Resources\DoctrineResource` provides CRUD for a Doctrine ORM entity
+(`composer require symfony/orm-pack`): pagination, sorting, search, filters, query tags, ManyToOne/ManyToMany associations through select fields.
+
+```php
+namespace App\MoonShine\Resources;
+
+use App\Entity\Book;
+use MoonShine\Symfony\Resources\DoctrineResource;
+use MoonShine\UI\Fields\ID;
+use MoonShine\UI\Fields\Image;
+use MoonShine\UI\Fields\Select;
+use MoonShine\UI\Fields\Text;
+
+/** @extends DoctrineResource<Book> */
+final class BookResource extends DoctrineResource
+{
+    protected string $entity = Book::class;
+
+    protected string $title = 'Books';
+
+    protected function indexFields(): iterable
+    {
+        return [
+            ID::make()->sortable(),
+            Text::make('Title', 'title')->sortable()->updateOnPreview(),
+            Image::make('Cover', 'cover'),
+        ];
+    }
+
+    protected function formFields(): iterable
+    {
+        return [
+            ID::make(),
+            Text::make('Title', 'title'),
+            Select::make('Author', 'author')->options([1 => 'Frank Herbert'])->nullable(),
+            Image::make('Cover', 'cover')->dir('books'),
+        ];
+    }
+
+    protected function detailFields(): iterable
+    {
+        return $this->indexFields();
+    }
+
+    protected function filters(): iterable
+    {
+        return [Text::make('Title', 'title')];
+    }
+
+    protected function search(): array
+    {
+        return ['title'];
+    }
+}
+```
+
+Fields write values through setters (`setTitle()`) or directly into mapped properties.
+Override `query()` to add joins or conditions, `fieldApply()` / `filterApply()` to change how values are written and filtered.
+
+For other data sources extend `MoonShine\Crud\Resources\CrudResource` and implement
+`findItem`, `getItems`, `save`, `delete` and `massDelete`, see `tests/Fixtures/Resources/PostResource.php`.
+
+## Validation
+
+Validation rules use the Laravel syntax and are declared on the form page of a resource:
+
+```php
+use MoonShine\Contracts\Core\TypeCasts\DataWrapperContract;
+use MoonShine\Crud\Pages\FormPage;
+
+final class BookFormPage extends FormPage
+{
+    protected function rules(DataWrapperContract $item): array
+    {
+        return ['title' => ['required', 'string', 'max:255']];
+    }
+}
+```
+
+```php
+// BookResource
+protected function pages(): array
+{
+    return [IndexPage::class, BookFormPage::class, DetailPage::class];
+}
+```
+
+Async forms receive a `422` response with the errors, regular forms are redirected back with the errors and the submitted values.
+Rules that need a database (`unique`, `exists`) are not supported, check them in the resource or with Symfony constraints.
+
+## Files
+
+`File` and `Image` fields store uploads on the configured disks, `dir()` and `disk()` select the location.
+Replaced and removed files are deleted from the disk.
+
+## Translations
+
+Messages live in the `moonshine` translation domain, English is bundled.
+Add other languages to `translations/moonshine.<locale>.php` (or yaml/xlf) of your application.
 
 ## Limitations
 
-- No authentication: the login page is rendered, but credentials are not checked. Protect the prefix with Symfony Security in the meantime.
-- No CSRF protection for the admin forms.
-- Form validation rules (`rules()`) are not applied.
-- `DoctrineCaster` only wraps entities, there is no ready-made Doctrine resource with queries, pagination and relations.
-- File storage and "update on preview" endpoints are not implemented.
+- Inline editing of relation fields from the table (`update-field.through-relation`) is not supported.
+- Notifications are kept in memory only.
+- The package has been tested with Symfony 7.4 on PHP 8.3, Symfony 8 requires PHP 8.4 and has not been tested yet.
 
 ## Development
 
