@@ -266,4 +266,85 @@ final class DoctrineResourceTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(404);
     }
+
+    private function ajax(string $method, string $uri, array $data = []): array
+    {
+        $this->client->xmlHttpRequest($method, $uri, $data, server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        return (array) json_decode((string) $this->client->getResponse()->getContent(), true);
+    }
+
+    public function testSymfonyFormConstraints(): void
+    {
+        $json = $this->ajax('POST', '/admin/resource/article-resource/crud', ['title' => 'ab', 'views' => '5000']);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(['This value is too short. It should have 3 characters or more.'], $json['errors']['title']);
+        self::assertSame(['This value should be less than 1000.'], $json['errors']['views']);
+        self::assertNull($this->article(4));
+    }
+
+    public function testFormTransformerErrors(): void
+    {
+        $json = $this->ajax('POST', '/admin/resource/article-resource/crud', ['title' => 'Valid', 'views' => 'abc']);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertArrayHasKey('views', $json['errors']);
+    }
+
+    public function testUniqueEntity(): void
+    {
+        $json = $this->ajax('POST', '/admin/resource/article-resource/crud', ['title' => 'Alpha']);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame(['This value is already used.'], $json['errors']['title']);
+    }
+
+    public function testUncheckedSwitcherIsFalse(): void
+    {
+        // MoonShine switchers submit "0" when unchecked
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Alpha', 'published' => '0']);
+
+        self::assertResponseIsSuccessful();
+        self::assertFalse($this->article(1)?->isPublished());
+
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Alpha', 'published' => '1']);
+        self::assertTrue($this->article(1)?->isPublished());
+    }
+
+    public function testEntityTypeUsesAddersAndRemovers(): void
+    {
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Alpha', 'tags' => ['1', '2']]);
+        self::assertCount(2, $this->article(1)?->getTags() ?? []);
+
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Alpha', 'tags' => ['2']]);
+        self::assertSame(['symfony'], $this->article(1)?->getTags()->map(static fn (Tag $tag): string => $tag->getName())->getValues());
+    }
+
+    public function testRegularFormRedirectsBackWithErrors(): void
+    {
+        $this->client->request('GET', '/admin/resource/article-resource/form-page/2');
+        $this->client->request('POST', '/admin/resource/article-resource/crud/2/update', [
+            '_token' => $this->token(),
+            '_component_name' => 'article-resource',
+            'title' => '',
+        ]);
+
+        self::assertResponseRedirects('/admin/resource/article-resource/form-page/2');
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'This value should not be blank.');
+        self::assertSame('Beta', $this->article(2)?->getTitle());
+    }
+
+    public function testInlineUpdateIsValidatedByTheForm(): void
+    {
+        $json = [];
+        $this->client->jsonRequest('PUT', '/admin/update-field/column/article-resource/3', [
+            'field' => 'title',
+            'value' => 'Al',
+        ], server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('Gamma', $this->article(3)?->getTitle());
+    }
 }

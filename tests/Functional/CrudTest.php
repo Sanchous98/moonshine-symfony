@@ -241,8 +241,9 @@ final class CrudTest extends WebTestCase
         self::assertResponseStatusCodeSame(422);
         $json = json_decode((string) $this->client->getResponse()->getContent(), true);
 
-        self::assertSame('The Title must be at least 3 characters.', $json['message']);
-        self::assertSame(['title' => ['The Title must be at least 3 characters.']], $json['errors']);
+        $message = 'This value is too short. It should have 3 characters or more.';
+        self::assertSame($message, $json['message']);
+        self::assertSame(['title' => [$message]], $json['errors']);
         self::assertSame('First post', PostResource::$items[1]['title']);
     }
 
@@ -258,11 +259,11 @@ final class CrudTest extends WebTestCase
         self::assertResponseRedirects('/admin/resource/post-resource/form-page/1');
 
         $this->client->followRedirect();
-        self::assertSelectorTextContains('form[action="/admin/resource/post-resource/crud/1/update"]', 'The Title field is required.');
+        self::assertSelectorTextContains('form[action="/admin/resource/post-resource/crud/1/update"]', 'This value should not be blank.');
 
         // errors are flashed only once
         $this->client->request('GET', '/admin/resource/post-resource/form-page/1');
-        self::assertSelectorTextNotContains('body', 'The Title field is required.');
+        self::assertSelectorTextNotContains('body', 'This value should not be blank.');
     }
 
     public function testOldInputIsRestored(): void

@@ -8,14 +8,15 @@ use MoonShine\Contracts\Core\DependencyInjection\CoreContract;
 use MoonShine\Contracts\Core\DependencyInjection\CrudRequestContract;
 use MoonShine\Contracts\Core\DependencyInjection\RequestContract;
 use MoonShine\Contracts\UI\FieldContract;
-use MoonShine\Crud\Contracts\Page\FormPageContract;
 use MoonShine\Crud\JsonResponse;
 use MoonShine\Crud\Resources\CrudResource;
 use MoonShine\Support\Enums\ToastType;
 use MoonShine\Symfony\DependencyInjection\Request;
-use MoonShine\Symfony\Validation\Validator;
+use MoonShine\Symfony\Form\FormProcessor;
+use MoonShine\Symfony\Form\FormResult;
 use MoonShine\UI\Enums\HtmlMode;
 use Symfony\Component\HttpFoundation\JsonResponse as SymfonyJsonResponse;
+use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Attribute\AsController;
@@ -27,7 +28,7 @@ final class CrudController extends MoonShineController
 {
     public function __construct(
         CoreContract $core,
-        private readonly Validator $validator,
+        private readonly FormProcessor $formProcessor,
     ) {
         parent::__construct($core);
     }
@@ -99,10 +100,10 @@ final class CrudController extends MoonShineController
 
         $resource->setActivePage($resource->getFormPage());
 
-        $errors = $this->validate($resource, $request);
+        $result = $this->formProcessor->process($resource, $item, $this->symfonyRequest($request));
 
-        if ($errors !== []) {
-            return $this->validationFailed($resource, $request, $errors);
+        if (! $result->isValid()) {
+            return $this->validationFailed($resource, $request, $result);
         }
 
         $redirectRoute = static function (CrudResource $resource) use ($request): ?string {
@@ -120,7 +121,7 @@ final class CrudController extends MoonShineController
         };
 
         try {
-            $item = $resource->save($resource->getCaster()->cast($item));
+            $item = $resource->save($resource->getCaster()->cast($result->item), $result->fields);
         } catch (Throwable $e) {
             return $resource->modifyErrorResponse(
                 JsonResponse::make()->toast($e->getMessage(), ToastType::ERROR)->setStatusCode(Response::HTTP_INTERNAL_SERVER_ERROR),
@@ -165,47 +166,19 @@ final class CrudController extends MoonShineController
         );
     }
 
-    /**
-     * @return array<string, list<string>>
-     */
-    private function validate(CrudResource $resource, RequestContract $request): array
+    private function validationFailed(CrudResource $resource, RequestContract $request, FormResult $result): Response
     {
-        $page = $resource->getFormPage();
+        $errors = $result->errors;
 
-        if (! $page instanceof FormPageContract) {
-            return [];
-        }
-
-        $page->prepareForValidation();
-
-        $attributes = [];
-
-        foreach ($resource->getFormFields()->onlyFields() as $field) {
-            $attributes[$field->getNameDot()] = $field->getLabel();
-        }
-
-        return $this->validator->validate(
-            $request->getAll()->toArray(),
-            $page->getRules(),
-            $page->validationMessages(),
-            $attributes,
-        );
-    }
-
-    /**
-     * @param array<string, list<string>> $errors
-     */
-    private function validationFailed(CrudResource $resource, RequestContract $request, array $errors): Response
-    {
         if ($request->isAjax() || $request->isWantsJson()) {
             return new SymfonyJsonResponse([
-                'message' => (string) (array_values($errors)[0][0] ?? 'The given data was invalid.'),
+                'message' => $result->getFirstError(),
                 'errors' => $errors,
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $symfonyRequest = $request instanceof Request ? $request->getSymfonyRequest() : null;
-        $session = $symfonyRequest?->hasSession() ? $symfonyRequest->getSession() : null;
+        $symfonyRequest = $this->symfonyRequest($request);
+        $session = $symfonyRequest->hasSession() ? $symfonyRequest->getSession() : null;
 
         if ($session instanceof FlashBagAwareSessionInterface) {
             $formName = $request->getScalar('_component_name');
@@ -215,11 +188,20 @@ final class CrudController extends MoonShineController
             $session->getFlashBag()->add(Request::OLD_INPUT_KEY, $request->getExcept(['_token', 'password']));
         }
 
-        $back = $symfonyRequest?->headers->get('referer');
+        $back = $symfonyRequest->headers->get('referer');
 
         return $this->redirect(\is_string($back) && $back !== ''
             ? $back
             : $resource->getFormPageUrl($resource->getCastedData()));
+    }
+
+    private function symfonyRequest(RequestContract $request): SymfonyRequest
+    {
+        if ($request instanceof Request) {
+            return $request->getSymfonyRequest();
+        }
+
+        throw new \LogicException('MoonShine request is not bound to the Symfony request.');
     }
 
     private function resourceNotFound(): Response
