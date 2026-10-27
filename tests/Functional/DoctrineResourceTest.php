@@ -7,6 +7,7 @@ namespace MoonShine\Symfony\Tests\Functional;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Article;
+use MoonShine\Symfony\Tests\Fixtures\Doctrine\ArticleEventSubscriber;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Category;
 use MoonShine\Symfony\Tests\Fixtures\Doctrine\Tag;
 use MoonShine\Symfony\Tests\Fixtures\TestKernel;
@@ -47,6 +48,8 @@ final class DoctrineResourceTest extends WebTestCase
 
         $em->flush();
         $em->clear();
+
+        ArticleEventSubscriber::$log = [];
     }
 
     private function em(): EntityManagerInterface
@@ -346,5 +349,47 @@ final class DoctrineResourceTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(422);
         self::assertSame('Gamma', $this->article(3)?->getTitle());
+    }
+
+    public function testEventsOnCreateAndUpdate(): void
+    {
+        $this->ajax('POST', '/admin/resource/article-resource/crud', ['title' => 'Delta!!']);
+        self::assertResponseStatusCodeSame(201);
+
+        $this->ajax('POST', '/admin/resource/article-resource/crud/4/update', ['title' => 'Delta 2!']);
+        self::assertResponseIsSuccessful();
+
+        self::assertSame([
+            'BeforeCreatingEvent:Delta!!',
+            'AfterCreatedEvent:Delta',
+            'BeforeUpdatingEvent:Delta 2!',
+            'AfterUpdatedEvent:Delta 2',
+        ], ArticleEventSubscriber::$log);
+
+        self::assertSame('Delta 2', $this->article(4)?->getTitle());
+    }
+
+    public function testEventsOnDelete(): void
+    {
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/delete');
+        $this->ajax('POST', '/admin/resource/article-resource/crud/mass-delete', ['ids' => [2, 3]]);
+
+        self::assertSame([
+            'BeforeDeletingEvent:Alpha',
+            'AfterDeletedEvent:Alpha',
+            'BeforeMassDeletingEvent:2,3',
+            'AfterMassDeletedEvent:2,3',
+        ], ArticleEventSubscriber::$log);
+    }
+
+    public function testListenerCanPreventDeletion(): void
+    {
+        $this->ajax('POST', '/admin/resource/article-resource/crud/1/update', ['title' => 'Protected']);
+
+        $this->client->xmlHttpRequest('POST', '/admin/resource/article-resource/crud/1/delete', server: ['HTTP_X_XSRF_TOKEN' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(500);
+        self::assertSame('This article cannot be deleted', json_decode((string) $this->client->getResponse()->getContent(), true)['message'] ?? null);
+        self::assertNotNull($this->article(1));
     }
 }
