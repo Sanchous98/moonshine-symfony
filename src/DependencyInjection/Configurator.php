@@ -61,7 +61,7 @@ final class Configurator implements ConfiguratorContract
 
     public function isUseNotifications(): bool
     {
-        return true;
+        return (bool) $this->get('notifications.enabled', true);
     }
 
     public function getLayout(): string

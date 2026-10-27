@@ -68,6 +68,7 @@ final class TestKernel extends Kernel
             'http_method_override' => false,
             'property_access' => true,
             'form' => true,
+            'notifier' => true,
             'validation' => true,
             'translator' => ['default_path' => '%kernel.project_dir%/translations'],
             'session' => ['storage_factory_id' => 'session.storage.factory.mock_file'],
@@ -152,7 +153,8 @@ final class TestKernel extends Kernel
             ->set('logger', NullLogger::class)
             ->set('test.memory_filesystem', Filesystem::class)
                 ->args([inline_service(InMemoryFilesystemAdapter::class)])
-                ->public();
+                ->public()
+            ->alias('test.notifier', 'notifier')->public();
 
         $container->services()
             ->defaults()->autowire()->autoconfigure()

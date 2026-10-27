@@ -31,7 +31,6 @@ use MoonShine\Crud\Contracts\Notifications\MoonShineNotificationContract;
 use MoonShine\Crud\Contracts\Page\DetailPageContract;
 use MoonShine\Crud\Contracts\Page\FormPageContract;
 use MoonShine\Crud\Contracts\Page\IndexPageContract;
-use MoonShine\Crud\Notifications\MemoryNotification;
 use MoonShine\Crud\Pages\DetailPage;
 use MoonShine\Crud\Pages\FormPage;
 use MoonShine\Crud\Pages\IndexPage;
@@ -54,6 +53,9 @@ use MoonShine\Symfony\DependencyInjection\Router;
 use MoonShine\Symfony\DependencyInjection\Translator;
 use MoonShine\Symfony\DependencyInjection\ViewRenderer;
 use MoonShine\Symfony\Layout\AppLayout;
+use MoonShine\Symfony\Notifications\MoonShineChannel;
+use MoonShine\Symfony\Notifications\NotificationService;
+use MoonShine\Symfony\Notifications\NotificationStorage;
 use MoonShine\Symfony\Optimizer\OptimizerCacheWarmer;
 use MoonShine\Symfony\Optimizer\OptimizerCollection;
 use MoonShine\Symfony\Security\AccessSubscriber;
@@ -73,6 +75,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
+use Symfony\Component\Notifier\Channel\ChannelInterface;
 
 final class MoonShineBundle extends AbstractBundle
 {
@@ -159,6 +162,16 @@ final class MoonShineBundle extends AbstractBundle
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('notifications')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->end()
+                        ->scalarNode('pool')
+                            ->info('PSR-6 cache pool service keeping the notifications, use a persistent one in production')
+                            ->defaultValue('cache.app')
+                        ->end()
+                    ->end()
+                ->end()
                 ->booleanNode('csrf')
                     ->info('Protect admin requests with CSRF tokens, requires symfony/security-csrf')
                     ->defaultTrue()
@@ -196,7 +209,7 @@ final class MoonShineBundle extends AbstractBundle
         $this->assets($config, $builder);
         $this->menu($builder);
         $this->cache($builder);
-        $this->notifications($builder);
+        $this->notifications($config, $builder);
         $this->security($config, $builder);
         $this->storage($config, $builder);
     }
@@ -480,7 +493,10 @@ final class MoonShineBundle extends AbstractBundle
             ->setPublic(true);
     }
 
-    private function notifications(ContainerBuilder $builder): void
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function notifications(array $config, ContainerBuilder $builder): void
     {
         // Laravel style string rules are an optional fallback
         if (class_exists(\Illuminate\Validation\Factory::class)) {
@@ -497,9 +513,25 @@ final class MoonShineBundle extends AbstractBundle
                 new Reference(LaravelValidator::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
             ]);
 
+        /** @var array{pool: string} $notifications */
+        $notifications = $config['notifications'];
+
         $builder
-            ->register(MoonShineNotificationContract::class, MemoryNotification::class)
-            ->setPublic(true)
-            ->setAutowired(true);
+            ->register(NotificationStorage::class)
+            ->setArguments([new Reference($notifications['pool'])]);
+
+        $builder
+            ->register(NotificationService::class)
+            ->setAutowired(true)
+            ->setPublic(true);
+
+        $builder->setAlias(MoonShineNotificationContract::class, NotificationService::class)->setPublic(true);
+
+        if (interface_exists(ChannelInterface::class)) {
+            $builder
+                ->register(MoonShineChannel::class)
+                ->setArguments([new Reference(MoonShineNotificationContract::class)])
+                ->addTag('notifier.channel', ['channel' => MoonShineChannel::NAME]);
+        }
     }
 }
